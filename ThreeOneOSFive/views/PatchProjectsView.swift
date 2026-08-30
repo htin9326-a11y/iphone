@@ -432,7 +432,7 @@ private struct PatchProjectDetailView: View {
                         .disabled(isWorking)
                     }
                 } footer: {
-                    Text(language.text("patch.apply_footer"))
+                    Text("Trước khi áp dụng, Aujunpeak VN sẽ lưu file gốc để có thể khôi phục khi cần.")
                 }
             }
         }

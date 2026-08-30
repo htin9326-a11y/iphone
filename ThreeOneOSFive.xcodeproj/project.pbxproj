@@ -70,6 +70,9 @@
 		3105A211 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3105A031; };
 		AJP9001 /* Bụng.3105 in Resources */ = {isa = PBXBuildFile; fileRef = AJP9101; };
 		AJP9002 /* Cổ.3105 in Resources */ = {isa = PBXBuildFile; fileRef = AJP9102; };
+		AJP9003 /* drag.3105 in Resources */ = {isa = PBXBuildFile; fileRef = AJP9103; };
+		AJP9004 /* nhe.3105 in Resources */ = {isa = PBXBuildFile; fileRef = AJP9104; };
+		AJP9005 /* magic.3105 in Resources */ = {isa = PBXBuildFile; fileRef = AJP9105; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -154,6 +157,9 @@
 		3105B123 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		AJP9101 /* Bụng.3105 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Bụng.3105"; sourceTree = "<group>"; };
 		AJP9102 /* Cổ.3105 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Cổ.3105"; sourceTree = "<group>"; };
+		AJP9103 /* drag.3105 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "drag.3105"; sourceTree = "<group>"; };
+		AJP9104 /* nhe.3105 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "nhe.3105"; sourceTree = "<group>"; };
+		AJP9105 /* magic.3105 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "magic.3105"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +196,9 @@
 				3105A031 /* Assets.xcassets */,
 				AJP9101 /* Bụng.3105 */,
 				AJP9102 /* Cổ.3105 */,
+				AJP9103 /* drag.3105 */,
+				AJP9104 /* nhe.3105 */,
+				AJP9105 /* magic.3105 */,
 			);
 			path = ThreeOneOSFive;
 			sourceTree = "<group>";
@@ -359,6 +368,9 @@
 				3105A228,
 				AJP9001,
 				AJP9002,
+				AJP9003,
+				AJP9004,
+				AJP9005,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,7 +460,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ThreeOneOSFive/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = 3105;
+				INFOPLIST_KEY_CFBundleDisplayName = "Aujunpeak VN";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -482,7 +494,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ThreeOneOSFive/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = 3105;
+				INFOPLIST_KEY_CFBundleDisplayName = "Aujunpeak VN";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -502,6 +502,7 @@ private struct LicenseFailureOverlay: View {
 
 private struct LicenseActivationView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
+    private let zaloURL = URL(string: "https://zalo.me/0833091543")!
     @State private var keyText = ""
     @State private var glow = false
     @State private var shake = false
@@ -613,6 +614,22 @@ private struct LicenseActivationView: View {
                             }
                             .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+
+                            Link(destination: zaloURL) {
+                                HStack(spacing: 9) {
+                                    Image(systemName: "message.fill")
+                                    Text("Liên hệ mua Key")
+                                }
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .background(Color.blue.opacity(0.18), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                        .strokeBorder(Color.blue.opacity(0.45), lineWidth: 1)
+                                }
+                            }
                         }
                         .padding(16)
                         .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
