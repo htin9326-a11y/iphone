@@ -392,6 +392,8 @@ private struct HomeAdminOverlayCard: View {
 private struct FunctionOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @State private var refreshToken = 0
+    @State private var applyPromptItem: RemoteAdminSwitch?
+    @State private var showPatchCenter = false
 
     var body: some View {
         NavigationStack {
@@ -405,6 +407,7 @@ private struct FunctionOverlayView: View {
                         functionTargetCard
                         remoteFunctions
                         statusCard
+                            .id(refreshToken)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -427,6 +430,37 @@ private struct FunctionOverlayView: View {
             }
             .onAppear {
                 Task { await licenseSession.refreshStatus() }
+            }
+        }
+        .sheet(item: $applyPromptItem) { item in
+            ApplyPatchPromptView(
+                title: item.title,
+                packageName: LocalRemoteSwitchService.bundledPatchDisplayName(for: item),
+                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item),
+                onApply: {
+                    applyPromptItem = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        showPatchCenter = true
+                    }
+                },
+                onLater: {
+                    applyPromptItem = nil
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showPatchCenter) {
+            ZStack(alignment: .topTrailing) {
+                PatchProjectsView()
+                Button {
+                    showPatchCenter = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(12)
+                }
+                .accessibilityLabel("Đóng")
+                .zIndex(20)
             }
         }
         .background(Color(uiColor: .systemBackground))
@@ -455,12 +489,17 @@ private struct FunctionOverlayView: View {
         } else {
             VStack(spacing: 10) {
                 ForEach(licenseSession.switches) { item in
-                    RemoteFunctionSwitchCard(item: item) {
-                        refreshToken &+= 1
-                    }
+                    RemoteFunctionSwitchCard(
+                        item: item,
+                        onChange: {
+                            refreshToken &+= 1
+                        },
+                        onRequestApply: { requestedItem in
+                            applyPromptItem = requestedItem
+                        }
+                    )
                 }
             }
-            .id(refreshToken)
         }
     }
 
@@ -585,15 +624,19 @@ private struct FunctionOverlayView: View {
 private struct RemoteFunctionSwitchCard: View {
     let item: RemoteAdminSwitch
     let onChange: () -> Void
+    let onRequestApply: (RemoteAdminSwitch) -> Void
     @State private var isOn: Bool
     @State private var operationMessage: String?
     @State private var isBusy = false
-    @State private var showApplyPrompt = false
-    @State private var showPatchCenter = false
 
-    init(item: RemoteAdminSwitch, onChange: @escaping () -> Void) {
+    init(
+        item: RemoteAdminSwitch,
+        onChange: @escaping () -> Void,
+        onRequestApply: @escaping (RemoteAdminSwitch) -> Void
+    ) {
         self.item = item
         self.onChange = onChange
+        self.onRequestApply = onRequestApply
         _isOn = State(initialValue: item.enabled && LocalRemoteSwitchService.isEnabled(item))
     }
 
@@ -627,6 +670,21 @@ private struct RemoteFunctionSwitchCard: View {
                     .font(.caption)
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
                     .lineLimit(3)
+
+                if isOn && LocalRemoteSwitchService.hasBundledPatch(for: item) {
+                    Button {
+                        onRequestApply(item)
+                    } label: {
+                        Label("Apply Patch", systemImage: "checkmark.shield.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.accent)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(AppTheme.accent.opacity(0.10), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
             }
             Spacer(minLength: 8)
             Toggle("", isOn: Binding(
@@ -647,7 +705,7 @@ private struct RemoteFunctionSwitchCard: View {
                                     : "Đã gỡ package và workspace local"
                                 isBusy = false
                                 if newValue && LocalRemoteSwitchService.hasBundledPatch(for: item) {
-                                    showApplyPrompt = true
+                                    onRequestApply(item)
                                 }
                                 onChange()
                             }
@@ -685,37 +743,6 @@ private struct RemoteFunctionSwitchCard: View {
                     operationMessage = "Lỗi: \(error.localizedDescription)"
                 }
                 onChange()
-            }
-        }
-        .sheet(isPresented: $showApplyPrompt) {
-            ApplyPatchPromptView(
-                title: item.title,
-                packageName: LocalRemoteSwitchService.bundledPatchDisplayName(for: item),
-                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item),
-                onApply: {
-                    showApplyPrompt = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        showPatchCenter = true
-                    }
-                },
-                onLater: {
-                    showApplyPrompt = false
-                }
-            )
-        }
-        .fullScreenCover(isPresented: $showPatchCenter) {
-            ZStack(alignment: .topTrailing) {
-                PatchProjectsView()
-                Button {
-                    showPatchCenter = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(12)
-                }
-                .accessibilityLabel("Đóng")
-                .zIndex(20)
             }
         }
     }
