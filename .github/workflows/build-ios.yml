@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: macos-15
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -28,12 +27,13 @@ jobs:
 
       - name: Create IPA
         run: |
+          rm -rf Payload Aujunpeak-VN.ipa
           mkdir -p Payload
-          cp -R build/3105.app Payload/
-          zip -r 3105-unsigned.ipa Payload
+          cp -R "build/3105.app" "Payload/@huanhavn.app"
+          zip -qry Aujunpeak-VN.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: 3105-IPA
-          path: 3105-unsigned.ipa
+          name: Aujunpeak-VN-IPA
+          path: Aujunpeak-VN.ipa
