@@ -588,6 +588,8 @@ private struct RemoteFunctionSwitchCard: View {
     @State private var isOn: Bool
     @State private var operationMessage: String?
     @State private var isBusy = false
+    @State private var showApplyPrompt = false
+    @State private var showPatchCenter = false
 
     init(item: RemoteAdminSwitch, onChange: @escaping () -> Void) {
         self.item = item
@@ -644,6 +646,9 @@ private struct RemoteFunctionSwitchCard: View {
                                     ? LocalRemoteSwitchService.statusText(for: item)
                                     : "Đã gỡ package và workspace local"
                                 isBusy = false
+                                if newValue && LocalRemoteSwitchService.hasBundledPatch(for: item) {
+                                    showApplyPrompt = true
+                                }
                                 onChange()
                             }
                         } catch {
@@ -682,6 +687,121 @@ private struct RemoteFunctionSwitchCard: View {
                 onChange()
             }
         }
+        .sheet(isPresented: $showApplyPrompt) {
+            ApplyPatchPromptView(
+                title: item.title,
+                packageName: LocalRemoteSwitchService.bundledPatchDisplayName(for: item),
+                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item),
+                onApply: {
+                    showApplyPrompt = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        showPatchCenter = true
+                    }
+                },
+                onLater: {
+                    showApplyPrompt = false
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showPatchCenter) {
+            ZStack(alignment: .topTrailing) {
+                PatchProjectsView()
+                Button {
+                    showPatchCenter = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(12)
+                }
+                .accessibilityLabel("Đóng")
+                .zIndex(20)
+            }
+        }
+    }
+}
+
+private struct ApplyPatchPromptView: View {
+    let title: String
+    let packageName: String
+    let targetBundleID: String
+    let onApply: () -> Void
+    let onLater: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.red, Color.orange.opacity(0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 78, height: 78)
+                .shadow(color: .red.opacity(0.28), radius: 18, y: 8)
+
+                VStack(spacing: 6) {
+                    Text("Package đã sẵn sàng")
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                    Text(title)
+                        .font(.headline)
+                    Text(packageName)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(AppTheme.accent)
+                }
+
+                VStack(spacing: 10) {
+                    HStack {
+                        Text("Target")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(targetBundleID)
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                    Divider()
+                    HStack {
+                        Text("Trạng thái")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Label("Đã import", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+                .padding(14)
+                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                Text("Nhấn Apply Patch để mở đúng màn Patch gốc của app. Tại đó bạn chọn package vừa import và dùng nút Apply Patch có sẵn.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button(action: onApply) {
+                    Label("Apply Patch", systemImage: "checkmark.shield.fill")
+                        .font(.headline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+
+                Button("Để sau", action: onLater)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(22)
+            .navigationTitle("Apply Patch")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -720,6 +840,27 @@ private enum LocalRemoteSwitchService {
             try removeMarker(for: item)
             UserDefaults.standard.set(false, forKey: storageKey(item))
         }
+    }
+
+    static func hasBundledPatch(for item: RemoteAdminSwitch) -> Bool {
+        bundledPatchFilename(for: item) != nil
+    }
+
+    static func bundledPatchDisplayName(for item: RemoteAdminSwitch) -> String {
+        bundledPatchFilename(for: item) ?? "Không có package"
+    }
+
+    static func targetBundleID(for item: RemoteAdminSwitch) -> String {
+        guard let source = try? bundledPatchURL(for: item),
+              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
+              let summary = try? PatchPackageCodec.inspect(data),
+              let decoded = try? PatchPackageCodec.decode(
+                data,
+                password: summary.isPasswordProtected ? packagePassword : nil
+              ) else {
+            return "com.dts.freefireth"
+        }
+        return decoded.project.allBundleIdentifiers.first ?? "com.dts.freefireth"
     }
 
     private static func bundledPatchFilename(for item: RemoteAdminSwitch) -> String? {
