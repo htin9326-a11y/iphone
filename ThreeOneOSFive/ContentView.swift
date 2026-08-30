@@ -641,7 +641,7 @@ private struct RemoteFunctionSwitchCard: View {
                             await MainActor.run {
                                 withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
                                 operationMessage = newValue
-                                    ? "Đã nạp vào Patch Library + AppDataBrowser local"
+                                    ? LocalRemoteSwitchService.statusText(for: item)
                                     : "Đã gỡ package và workspace local"
                                 isBusy = false
                                 onChange()
@@ -686,13 +686,29 @@ private struct RemoteFunctionSwitchCard: View {
 }
 
 /// Switch 01/02 nạp package .3105 vào hệ Patch Library/Workspace của chính Aujunpeak VN.
-/// Đồng thời tạo một bản mirror trong Documents/AppDataBrowserImports để có thể kiểm tra
-/// bằng trình duyệt dữ liệu cục bộ của app. Không thực hiện ghi dữ liệu sang container app khác.
+/// Đồng thời tạo một bản mirror trong Documents/AppDataBrowserImports để kiểm tra package local.
+/// AppDataBrowser thật duyệt container ứng dụng được ContainerStore resolve; thư mục mirror này
+/// không phải container của ứng dụng đích và không được coi là thao tác Apply.
 private enum LocalRemoteSwitchService {
     private static let packagePassword = "huanha"
 
     static func isEnabled(_ item: RemoteAdminSwitch) -> Bool {
         UserDefaults.standard.bool(forKey: storageKey(item)) && localPackageExists(for: item)
+    }
+
+    static func statusText(for item: RemoteAdminSwitch) -> String {
+        guard let source = try? bundledPatchURL(for: item),
+              let source,
+              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
+              let summary = try? PatchPackageCodec.inspect(data),
+              let decoded = try? PatchPackageCodec.decode(
+                data,
+                password: summary.isPasswordProtected ? packagePassword : nil
+              ) else {
+            return "Package đã import nhưng không đọc được metadata"
+        }
+        let bundles = decoded.project.allBundleIdentifiers.joined(separator: ", ")
+        return "Đã import • \(decoded.project.rules.count) rule • \(bundles)"
     }
 
     static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch) throws {
