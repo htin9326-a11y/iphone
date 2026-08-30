@@ -239,8 +239,8 @@ private struct DashboardView: View {
         NavigationStack {
             ZStack(alignment: .top) {
                 List {
+                    shopBannerSection
                     deviceSection
-                    featuresSection
                 }
                 .safeAreaInset(edge: .top) {
                     Color.clear.frame(height: 72)
@@ -262,6 +262,54 @@ private struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+        }
+    }
+
+    private var shopBannerSection: some View {
+        Section {
+            Link(destination: URL(string: "https://huanha.shop/")!) {
+                ZStack(alignment: .bottomLeading) {
+                    Image("AujunpeakHomeBanner")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 168)
+                        .clipped()
+
+                    LinearGradient(
+                        colors: [Color.clear, Color.black.opacity(0.72)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("AUJUNPEAK VN")
+                                .font(.system(size: 18, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("huanha.shop • Nhấn để truy cập")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right.circle.fill")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(14)
+                }
+                .frame(maxWidth: .infinity)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.blue.opacity(0.35), lineWidth: 1)
+                }
+                .shadow(color: Color.blue.opacity(0.18), radius: 18, y: 8)
+            }
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
     }
 
@@ -389,11 +437,16 @@ private struct HomeAdminOverlayCard: View {
     }
 }
 
+private struct PatchCenterRoute: Identifiable {
+    let id = UUID()
+    let projectID: UUID
+}
+
 private struct FunctionOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @State private var refreshToken = 0
     @State private var applyPromptItem: RemoteAdminSwitch?
-    @State private var showPatchCenter = false
+    @State private var patchCenterRoute: PatchCenterRoute?
 
     var body: some View {
         NavigationStack {
@@ -438,9 +491,12 @@ private struct FunctionOverlayView: View {
                 packageName: LocalRemoteSwitchService.bundledPatchDisplayName(for: item),
                 targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item),
                 onApply: {
+                    let projectID = LocalRemoteSwitchService.packageID(for: item)
                     applyPromptItem = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        showPatchCenter = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                        if let projectID {
+                            patchCenterRoute = PatchCenterRoute(projectID: projectID)
+                        }
                     }
                 },
                 onLater: {
@@ -448,11 +504,11 @@ private struct FunctionOverlayView: View {
                 }
             )
         }
-        .fullScreenCover(isPresented: $showPatchCenter) {
+        .fullScreenCover(item: $patchCenterRoute) { route in
             ZStack(alignment: .topTrailing) {
-                PatchProjectsView()
+                PatchDirectApplyView(projectID: route.projectID)
                 Button {
-                    showPatchCenter = false
+                    patchCenterRoute = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28, weight: .semibold))
@@ -538,7 +594,7 @@ private struct FunctionOverlayView: View {
                 Text("Aujunpeak VN")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.accent)
-                Text("Chức năng được đồng bộ từ Admin Server")
+                Text("Trung tâm chức năng Aujunpeak VN")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -756,79 +812,75 @@ private struct ApplyPatchPromptView: View {
     let onLater: () -> Void
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 18) {
+        VStack(spacing: 14) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.35))
+                .frame(width: 42, height: 5)
+                .padding(.top, 8)
+
+            HStack(spacing: 12) {
                 ZStack {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [Color.red, Color.orange.opacity(0.85)],
+                                colors: [Color.red, Color.orange],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(.white)
                 }
-                .frame(width: 78, height: 78)
-                .shadow(color: .red.opacity(0.28), radius: 18, y: 8)
+                .frame(width: 58, height: 58)
 
-                VStack(spacing: 6) {
-                    Text("Package đã sẵn sàng")
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Apply Patch")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
                     Text(title)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                     Text(packageName)
-                        .font(.system(.subheadline, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundStyle(AppTheme.accent)
                 }
-
-                VStack(spacing: 10) {
-                    HStack {
-                        Text("Target")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(targetBundleID)
-                            .font(.system(.caption, design: .monospaced))
-                    }
-                    Divider()
-                    HStack {
-                        Text("Trạng thái")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Label("Đã import", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                }
-                .padding(14)
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                Text("Nhấn Apply Patch để mở đúng màn Patch gốc của app. Tại đó bạn chọn package vừa import và dùng nút Apply Patch có sẵn.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Button(action: onApply) {
-                    Label("Apply Patch", systemImage: "checkmark.shield.fill")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-
-                Button("Để sau", action: onLater)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                Spacer()
             }
-            .padding(22)
-            .navigationTitle("Apply Patch")
-            .navigationBarTitleDisplayMode(.inline)
+
+            HStack(spacing: 10) {
+                Image(systemName: "shippingbox.fill")
+                    .foregroundStyle(AppTheme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Target")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(targetBundleID)
+                        .font(.system(.caption, design: .monospaced).weight(.semibold))
+                }
+                Spacer()
+                Label("Sẵn sàng", systemImage: "checkmark.circle.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.green)
+            }
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            Button(action: onApply) {
+                Label("Apply Patch", systemImage: "checkmark.shield.fill")
+                    .font(.headline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+
+            Button("Để sau", action: onLater)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 18)
+        .presentationDetents([.height(360)])
+        .presentationDragIndicator(.hidden)
     }
 }
 
@@ -888,6 +940,15 @@ private enum LocalRemoteSwitchService {
             return "com.dts.freefireth"
         }
         return decoded.project.allBundleIdentifiers.first ?? "com.dts.freefireth"
+    }
+
+    static func packageID(for item: RemoteAdminSwitch) -> UUID? {
+        guard let source = try? bundledPatchURL(for: item),
+              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
+              let summary = try? PatchPackageCodec.inspect(data) else {
+            return nil
+        }
+        return summary.packageID
     }
 
     private static func bundledPatchFilename(for item: RemoteAdminSwitch) -> String? {
@@ -1027,7 +1088,6 @@ private struct KeyInfoOverlayView: View {
                         keyHeader
                         keyDetails
                         deviceDetails
-                        serverDetails
                         adminCard
                     }
                     .padding(.horizontal, 16)
@@ -1071,7 +1131,7 @@ private struct KeyInfoOverlayView: View {
 
             Text("KEY INFORMATION")
                 .font(.system(size: 19, weight: .black, design: .rounded))
-            Text("Thông tin đồng bộ từ Aujunpeak Admin Server")
+            Text("Thông tin kích hoạt Aujunpeak VN")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -1130,23 +1190,6 @@ private struct KeyInfoOverlayView: View {
             InfoLine(title: "App version", value: AppUpdateChecker.currentVersion)
             Divider()
             InfoLine(title: "Device ID", value: licenseSession.deviceID, monospaced: true)
-        }
-    }
-
-    private var serverDetails: some View {
-        InfoCard(title: "SERVER", icon: "server.rack") {
-            InfoLine(title: "API", value: "103.140.249.74:8082", monospaced: true)
-            Divider()
-            InfoLine(title: "Switch từ Admin", value: "\(licenseSession.switches.count)")
-            Divider()
-            InfoLine(title: "Đồng bộ", value: licenseSession.lastError == nil ? "Đã kết nối" : "Có cảnh báo")
-            if let error = licenseSession.lastError, !error.isEmpty {
-                Divider()
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
         }
     }
 

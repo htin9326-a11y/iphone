@@ -52,6 +52,14 @@ struct ThreeOneOSFiveApp: App {
                     .opacity(showOnboarding ? 0 : 1)
                     .allowsHitTesting(!showOnboarding)
 
+                if let notice = licenseSession.failureNotice {
+                    LicenseFailureOverlay(notice: notice) {
+                        licenseSession.completeFailureLogout()
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(100)
+                }
+
                 if showOnboarding {
                     OnboardingView {
                         OnboardingStore.markCompleted()
@@ -271,6 +279,13 @@ private struct LicenseAPIResponse: Codable {
     let switches: [RemoteAdminSwitch]?
 }
 
+struct LicenseFailureNotice: Identifiable, Equatable {
+    let id = UUID()
+    let code: String
+    let title: String
+    let message: String
+}
+
 @MainActor
 final class LicenseSession: ObservableObject {
     @Published private(set) var license: RemoteLicenseInfo?
@@ -278,6 +293,7 @@ final class LicenseSession: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var lastError: String?
     @Published private(set) var requiresActivation = false
+    @Published private(set) var failureNotice: LicenseFailureNotice?
 
     private let keyStorageKey = "aujunpeak.remote.license.key"
     private let deviceStorageKey = "aujunpeak.remote.device.id"
@@ -330,6 +346,7 @@ final class LicenseSession: ObservableObject {
     }
 
     func refreshStatus() async {
+        guard failureNotice == nil else { return }
         guard !storedKey.isEmpty else {
             requiresActivation = true
             license = nil
@@ -339,10 +356,16 @@ final class LicenseSession: ObservableObject {
         do {
             let response = try await request(endpoint: "status.php", key: storedKey)
             guard response.ok, let info = response.license else {
-                lastError = response.message ?? "Key không còn hợp lệ."
-                requiresActivation = true
+                let message = response.message ?? "Key không còn hợp lệ."
+                lastError = message
                 license = nil
                 switches = []
+                requiresActivation = false
+                failureNotice = LicenseFailureNotice(
+                    code: response.code ?? "invalid",
+                    title: failureTitle(for: response.code),
+                    message: message
+                )
                 return
             }
             license = info
@@ -361,7 +384,28 @@ final class LicenseSession: ObservableObject {
         license = nil
         switches = []
         lastError = nil
+        failureNotice = nil
         requiresActivation = true
+    }
+
+    func completeFailureLogout() {
+        UserDefaults.standard.removeObject(forKey: keyStorageKey)
+        license = nil
+        switches = []
+        lastError = nil
+        failureNotice = nil
+        requiresActivation = true
+    }
+
+    private func failureTitle(for code: String?) -> String {
+        switch code {
+        case "revoked": return "KEY ĐÃ BỊ KHÓA"
+        case "expired": return "KEY ĐÃ HẾT HẠN"
+        case "device_not_bound": return "THIẾT BỊ ĐÃ BỊ RESET"
+        case "invalid_key": return "KEY KHÔNG HỢP LỆ"
+        case "not_activated": return "KEY CHƯA KÍCH HOẠT"
+        default: return "PHIÊN ĐĂNG NHẬP THẤT BẠI"
+        }
     }
 
     private func request(endpoint: String, key: String) async throws -> LicenseAPIResponse {
@@ -382,118 +426,235 @@ final class LicenseSession: ObservableObject {
     }
 }
 
+private struct LicenseFailureOverlay: View {
+    let notice: LicenseFailureNotice
+    let onFinished: () -> Void
+    @State private var appeared = false
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.96)
+                .ignoresSafeArea()
+
+            RadialGradient(
+                colors: [Color.red.opacity(pulse ? 0.28 : 0.10), Color.clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 280
+            )
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulse)
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.14))
+                        .frame(width: 112, height: 112)
+                    Circle()
+                        .stroke(Color.red.opacity(0.45), lineWidth: 2)
+                        .frame(width: appeared ? 126 : 86, height: appeared ? 126 : 86)
+                        .opacity(appeared ? 0.1 : 0.8)
+                    Image(systemName: "xmark.shield.fill")
+                        .font(.system(size: 52, weight: .black))
+                        .foregroundStyle(.red)
+                }
+
+                Text("FAILED")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(.red)
+
+                VStack(spacing: 7) {
+                    Text(notice.title)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(notice.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.64))
+                        .multilineTextAlignment(.center)
+                }
+
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Đang đăng xuất khỏi thiết bị…")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.72))
+                .padding(.top, 6)
+            }
+            .padding(28)
+            .scaleEffect(appeared ? 1 : 0.86)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.48, dampingFraction: 0.72)) {
+                appeared = true
+            }
+            pulse = true
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            onFinished()
+        }
+    }
+}
+
 private struct LicenseActivationView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @State private var keyText = ""
+    @State private var glow = false
+    @State private var shake = false
 
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [Color.black, Color(red: 0.20, green: 0.02, blue: 0.02)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                Color.black.ignoresSafeArea()
+
+                RadialGradient(
+                    colors: [Color.red.opacity(glow ? 0.24 : 0.10), Color.clear],
+                    center: .top,
+                    startRadius: 20,
+                    endRadius: 420
                 )
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true), value: glow)
 
                 ScrollView {
-                    VStack(spacing: 20) {
-                        Spacer(minLength: 40)
+                    VStack(spacing: 22) {
+                        Spacer(minLength: 34)
                         logo
 
-                        VStack(spacing: 6) {
+                        VStack(spacing: 7) {
                             Text("KÍCH HOẠT AUJUNPEAK VN")
-                                .font(.system(size: 23, weight: .black, design: .rounded))
+                                .font(.system(size: 24, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
-                            Text("Nhập key được cấp từ Admin Hà Văn Huấn")
+                            Text("Key được cấp bởi Admin Hà Văn Huấn")
                                 .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.68))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
 
-                        VStack(spacing: 12) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "key.fill").foregroundStyle(.red)
+                        VStack(spacing: 14) {
+                            HStack(spacing: 11) {
+                                ZStack {
+                                    Circle().fill(Color.red.opacity(0.14))
+                                    Image(systemName: "key.fill")
+                                        .foregroundStyle(.red)
+                                }
+                                .frame(width: 38, height: 38)
+
                                 TextField("AJP-XXXXX-XXXXX-XXXXX-XXXXX", text: $keyText)
                                     .textInputAutocapitalization(.characters)
                                     .autocorrectionDisabled(true)
                                     .foregroundStyle(.white)
+                                    .font(.system(.body, design: .monospaced))
                             }
-                            .padding(.horizontal, 14)
-                            .frame(height: 52)
-                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                            .padding(.horizontal, 12)
+                            .frame(height: 58)
+                            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay {
-                                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                    .strokeBorder(Color.red.opacity(0.30), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .strokeBorder(Color.red.opacity(0.34), lineWidth: 1)
                             }
 
                             HStack(spacing: 8) {
                                 Image(systemName: "iphone.gen3")
-                                Text("Device ID: \(licenseSession.deviceID.prefix(16))…")
+                                Text("Device ID  •  \(licenseSession.deviceID.prefix(18))…")
                             }
                             .font(.caption.monospaced())
-                            .foregroundStyle(.white.opacity(0.50))
+                            .foregroundStyle(.white.opacity(0.45))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        }
 
-                        if let error = licenseSession.lastError, !error.isEmpty {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(Color(red: 1.0, green: 0.48, blue: 0.48))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if let error = licenseSession.lastError, !error.isEmpty {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "xmark.octagon.fill")
+                                        .foregroundStyle(.red)
+                                    Text(error)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.55))
+                                    Spacer()
+                                }
                                 .padding(12)
-                                .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-
-                        Button {
-                            Task { _ = await licenseSession.activate(key: keyText) }
-                        } label: {
-                            HStack(spacing: 10) {
-                                if licenseSession.isLoading { ProgressView().tint(.white) }
-                                Image(systemName: "checkmark.shield.fill")
-                                Text(licenseSession.isLoading ? "Đang xác thực…" : "Kích hoạt Key")
+                                .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .transition(.move(edge: .top).combined(with: .opacity))
                             }
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(
-                                LinearGradient(colors: [Color.red, Color.orange], startPoint: .leading, endPoint: .trailing),
-                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            )
-                        }
-                        .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.55 : 1)
 
-                        VStack(spacing: 6) {
+                            Button {
+                                Task {
+                                    let ok = await licenseSession.activate(key: keyText)
+                                    if !ok {
+                                        await MainActor.run {
+                                            withAnimation(.default.repeatCount(3, autoreverses: true)) { shake.toggle() }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    if licenseSession.isLoading {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Image(systemName: "checkmark.shield.fill")
+                                    }
+                                    Text(licenseSession.isLoading ? "Đang xác thực…" : "Kích hoạt Key")
+                                }
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color.red, Color.orange],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    in: RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                )
+                                .shadow(color: .red.opacity(0.22), radius: 16, y: 8)
+                            }
+                            .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                        }
+                        .padding(16)
+                        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+                        }
+                        .offset(x: shake ? -7 : 0)
+
+                        VStack(alignment: .leading, spacing: 8) {
                             Label("Thời hạn bắt đầu từ lần kích hoạt đầu tiên", systemImage: "calendar.badge.clock")
-                            Label("Giới hạn thiết bị được kiểm soát bởi Admin", systemImage: "iphone.and.arrow.forward")
+                            Label("Thiết bị được quản lý theo key", systemImage: "iphone.and.arrow.forward")
+                            Label("Aujunpeak VN • Secure License", systemImage: "lock.shield.fill")
                         }
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.white.opacity(0.48))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(22)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 30)
                 }
             }
         }
+        .onAppear { glow = true }
     }
 
     private var logo: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.red.opacity(0.12))
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.red.opacity(0.10))
             if UIImage(named: "AujunpeakLogo") != nil {
                 Image("AujunpeakLogo")
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             } else {
                 Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 42, weight: .black))
+                    .font(.system(size: 44, weight: .black))
                     .foregroundStyle(.red)
             }
         }
-        .frame(width: 104, height: 104)
-        .shadow(color: .red.opacity(0.38), radius: 26, y: 12)
+        .frame(width: 112, height: 112)
+        .shadow(color: .red.opacity(glow ? 0.46 : 0.22), radius: glow ? 30 : 16, y: 10)
     }
 }

@@ -222,10 +222,7 @@ private struct PatchProjectRow: View {
                     .foregroundStyle(.primary)
                 Text(item.isLocked
                      ? language.text("patch.tap_to_unlock")
-                     : language.text(
-                        item.summary.schemaVersion >= 2 ? "patch.workspace_items_count" : "patch.rules_count",
-                        Int64((item.project?.rules.count ?? 0) + (item.project?.directories.count ?? 0))
-                     ))
+                     : "Aujunpeak VN • Cấu hình đã sẵn sàng")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -287,6 +284,88 @@ private struct PatchUnlockView: View {
     }
 }
 
+struct PatchDirectApplyView: View {
+    @StateObject private var store = PatchProjectStore()
+    let projectID: UUID
+
+    var body: some View {
+        NavigationStack {
+            PatchProjectDetailView(store: store, projectID: projectID)
+        }
+    }
+}
+
+private struct PatchBrandPanel: View {
+    let projectName: String
+    let bundleIDs: [String]
+    let itemCount: Int
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                Image("AujunpeakHomeBanner")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 150)
+                    .clipped()
+
+                LinearGradient(
+                    colors: [Color.clear, Color.black.opacity(0.80)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                HStack(spacing: 11) {
+                    AppLogo(size: 44)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Text("HUẤN HÀ VN")
+                                .font(.system(size: 17, weight: .black, design: .rounded))
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(.blue)
+                        }
+                        Text(projectName)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.82))
+                    }
+                    Spacer()
+                    Image(systemName: "shield.checkered")
+                        .font(.system(size: 24, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(14)
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "app.dashed")
+                    .foregroundStyle(AppTheme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cấu hình đã sẵn sàng")
+                        .font(.subheadline.weight(.semibold))
+                    Text(bundleIDs.first ?? "Aujunpeak VN")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(itemCount) mục")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Color.green.opacity(0.12), in: Capsule())
+            }
+            .padding(13)
+            .background(Color(uiColor: .secondarySystemBackground))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.blue.opacity(0.22), lineWidth: 1)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 private struct PatchProjectDetailView: View {
     @Environment(\.appLanguage) private var language
     @ObservedObject var store: PatchProjectStore
@@ -314,65 +393,14 @@ private struct PatchProjectDetailView: View {
     var body: some View {
         List {
             if let item, let project = item.project {
-                if isWorkspaceProject {
-                    Section {
-                        ForEach(project.allBundleIdentifiers, id: \.self) { bundleID in
-                            Label {
-                                Text(bundleID)
-                                    .font(.subheadline.monospaced())
-                            } icon: {
-                                Image(systemName: "app.dashed")
-                                    .foregroundStyle(AppTheme.accent)
-                            }
-                        }
-                        LabeledContent(language.text("patch.files")) {
-                            Text("\(project.rules.count)")
-                        }
-                        LabeledContent(language.text("patch.folders")) {
-                            Text("\(project.directories.count)")
-                        }
-                        if let workspaceURL = item.workspaceURL {
-                            NavigationLink {
-                                FileBrowserView(
-                                    containerPath: workspaceURL.path,
-                                    title: project.name,
-                                    bundleID: nil
-                                )
-                            } label: {
-                                Label(
-                                    language.text("patch.open_workspace"),
-                                    systemImage: "folder"
-                                )
-                            }
-                        }
-                    } header: {
-                        Text(language.text("patch.workspace"))
-                    } footer: {
-                        Text(language.text("patch.workspace_detail_footer"))
-                    }
-                } else {
-                    Section {
-                        ForEach(project.rules) { rule in
-                            Button {
-                                editingRule = rule
-                            } label: {
-                                HStack(spacing: 10) {
-                                    ruleSummary(rule)
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityHint(language.text("patch.edit_rule_hint"))
-                        }
-                    } header: {
-                        Text(language.text("patch.rules"))
-                    } footer: {
-                        Text(language.text("patch.legacy_footer"))
-                    }
+                Section {
+                    PatchBrandPanel(
+                        projectName: project.name,
+                        bundleIDs: project.allBundleIdentifiers,
+                        itemCount: project.rules.count + project.directories.count
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
 
                 Section(language.text("patch.password")) {
@@ -403,11 +431,6 @@ private struct PatchProjectDetailView: View {
                         }
                         .disabled(isWorking)
                     }
-
-                    Button(action: prepareExport) {
-                        actionLabel("patch.export", systemImage: "square.and.arrow.up")
-                    }
-                    .disabled(isWorking)
                 } footer: {
                     Text(language.text("patch.apply_footer"))
                 }
@@ -420,9 +443,6 @@ private struct PatchProjectDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if isWorking {
                     ProgressView()
-                } else if !isWorkspaceProject {
-                    Button(language.text("patch.edit")) { showEditor = true }
-                        .disabled(item?.project == nil)
                 }
             }
         }
