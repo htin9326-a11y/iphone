@@ -1,14 +1,14 @@
 AUJUNPEAK VN - APP + ADMIN SERVER
 
 APP API URL hiện tại:
-https://aujunpeak.store/aujunpeak-admin/api
+http://103.140.249.74:8082/api
 
 CÀI SERVER:
 1. Tạo MySQL database và user.
 2. Trong folder aujunpeak-admin, copy config.example.php thành config.php.
 3. Điền DB host/name/user/pass vào config.php.
 4. Upload folder aujunpeak-admin vào public_html/aujunpeak-admin.
-5. Truy cập https://aujunpeak.store/aujunpeak-admin/setup.php
+5. Truy cập http://103.140.249.74:8082/setup.php
 6. Tạo tài khoản Admin.
 7. Đăng nhập /aujunpeak-admin/login.php.
 

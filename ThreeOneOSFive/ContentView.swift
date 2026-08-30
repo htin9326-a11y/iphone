@@ -110,7 +110,7 @@ struct ContentView: View {
                     )
                 }
             }
-            .navigationTitle("3105")
+            .navigationTitle("Aujunpeak VN")
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             sectionContent(selectedVisibleSection)
@@ -235,7 +235,6 @@ private struct DashboardView: View {
     @Environment(\.appLanguage) private var language
     @EnvironmentObject private var appState: AppState
     @State private var showSettings = false
-    @State private var showLogs = false
     @Binding var cleanerEnabled: Bool
     @Binding var wallpapersEnabled: Bool
     let wallpapersSupported: Bool
@@ -260,12 +259,6 @@ private struct DashboardView: View {
             .tint(AppTheme.accent)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showLogs = true } label: {
-                        Image(systemName: "apple.terminal")
-                    }
-                    .accessibilityLabel(language.text("accessibility.open_logs"))
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
                     }
@@ -273,7 +266,6 @@ private struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showLogs) { LogView() }
         }
     }
 
@@ -362,9 +354,9 @@ private struct HomeAdminOverlayCard: View {
             .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("ADMIN HUẤN HÀ")
+                Text("ADMIN HÀ VĂN HUẤN")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
-                Text("Aujunpeak iOS • Hỗ trợ & liên hệ")
+                Text("Aujunpeak VN • Hỗ trợ & liên hệ")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -605,6 +597,14 @@ private struct RemoteFunctionSwitchCard: View {
         _isOn = State(initialValue: item.enabled && LocalRemoteSwitchService.isEnabled(item))
     }
 
+    private var displaySubtitle: String {
+        switch item.configKey {
+        case "function_01": return item.subtitle + " • Patch Bụng"
+        case "function_02": return item.subtitle + " • Patch Cổ"
+        default: return item.subtitle
+        }
+    }
+
     var body: some View {
         HStack(spacing: 13) {
             ZStack {
@@ -619,7 +619,7 @@ private struct RemoteFunctionSwitchCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
-                Text(item.enabled ? item.subtitle : "Admin đang tắt chức năng này")
+                Text(item.enabled ? displaySubtitle : "Admin đang tắt chức năng này")
                     .font(.caption)
                     .foregroundStyle(item.enabled ? Color.secondary : Color.orange)
                     .lineLimit(2)
@@ -676,13 +676,56 @@ private enum LocalRemoteSwitchService {
                 "config_key": item.configKey,
                 "title": item.title,
                 "enabled": true,
+                "bundled_patch": bundledPatchFilename(for: item) ?? NSNull(),
                 "updated_at": ISO8601DateFormatter().string(from: Date())
             ]
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
             try data.write(to: marker, options: .atomic)
-        } else if fm.fileExists(atPath: marker.path) {
-            try fm.removeItem(at: marker)
+            try stageBundledPatchIfNeeded(for: item)
+        } else {
+            if fm.fileExists(atPath: marker.path) { try fm.removeItem(at: marker) }
+            try removeStagedPatchIfNeeded(for: item)
         }
+    }
+
+    /// Function 01/02 được gắn sẵn với hai package người dùng cung cấp.
+    /// File chỉ được nạp/gỡ trong vùng dữ liệu của Aujunpeak VN.
+    private static func bundledPatchFilename(for item: RemoteAdminSwitch) -> String? {
+        switch item.configKey {
+        case "function_01": return "Bụng.3105"
+        case "function_02": return "Cổ.3105"
+        default: return nil
+        }
+    }
+
+    private static func stageBundledPatchIfNeeded(for item: RemoteAdminSwitch) throws {
+        guard let filename = bundledPatchFilename(for: item) else { return }
+        let ns = filename as NSString
+        let name = ns.deletingPathExtension
+        let ext = ns.pathExtension
+        guard let source = Bundle.main.url(forResource: name, withExtension: ext) else {
+            throw NSError(domain: "AujunpeakBundledPatch", code: 1, userInfo: [NSLocalizedDescriptionKey: "Không tìm thấy \(filename) trong app."])
+        }
+        let fm = FileManager.default
+        let patchFolder = try patchFolderURL()
+        try fm.createDirectory(at: patchFolder, withIntermediateDirectories: true)
+        let destination = patchFolder.appendingPathComponent(filename)
+        if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
+        try fm.copyItem(at: source, to: destination)
+    }
+
+    private static func removeStagedPatchIfNeeded(for item: RemoteAdminSwitch) throws {
+        guard let filename = bundledPatchFilename(for: item) else { return }
+        let url = try patchFolderURL().appendingPathComponent(filename)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private static func patchFolderURL() throws -> URL {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("AujunpeakPatchProfiles", isDirectory: true)
     }
 
     private static func storageKey(_ item: RemoteAdminSwitch) -> String {
@@ -818,7 +861,7 @@ private struct KeyInfoOverlayView: View {
 
     private var serverDetails: some View {
         InfoCard(title: "SERVER", icon: "server.rack") {
-            InfoLine(title: "API", value: "aujunpeak.store", monospaced: true)
+            InfoLine(title: "API", value: "103.140.249.74:8082", monospaced: true)
             Divider()
             InfoLine(title: "Switch từ Admin", value: "\(licenseSession.switches.count)")
             Divider()

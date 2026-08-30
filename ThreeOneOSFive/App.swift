@@ -8,15 +8,16 @@ struct ThreeOneOSFiveApp: App {
     @StateObject private var patchDraftCoordinator = PatchDraftCoordinator()
     @StateObject private var fileOperationCoordinator = FileOperationCoordinator()
     @StateObject private var licenseSession = LicenseSession()
-    @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
-    @State private var showOnboarding = OnboardingStore.shouldShow()
+    @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.vietnamese.rawValue
+    @AppStorage("aujunpeak.appearance") private var appearanceMode = "system"
+    @State private var showOnboarding = false
     @State private var showAttribution = false
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         setupLogCapture()
-        log("app: 3105 launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
+        log("app: Aujunpeak VN launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
     }
 
     private var language: AppLanguage {
@@ -27,6 +28,14 @@ struct ThreeOneOSFiveApp: App {
         Task {
             guard let offer = await AppUpdateChecker.check() else { return }
             await MainActor.run { updateOffer = offer }
+        }
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
         }
     }
 
@@ -59,6 +68,7 @@ struct ThreeOneOSFiveApp: App {
                     .zIndex(1)
                 }
             }
+            .preferredColorScheme(preferredColorScheme)
             .displayIdentityAttribution(isPresented: $showAttribution, enabled: !showOnboarding)
             .sheet(isPresented: $showAttribution) {
                 DisplayAttributionSheet()
@@ -215,7 +225,7 @@ class AppState: ObservableObject {
 enum AdminServerConfig {
     // Upload thư mục `aujunpeak-admin` vào domain/VPS ở cùng đường dẫn này,
     // hoặc đổi URL tại đây nếu bạn dùng domain/path khác.
-    static let apiBaseURL = URL(string: "https://aujunpeak.store/aujunpeak-admin/api")!
+    static let apiBaseURL = URL(string: "http://103.140.249.74:8082/api")!
 }
 
 struct RemoteAdminSwitch: Codable, Identifiable, Equatable {
