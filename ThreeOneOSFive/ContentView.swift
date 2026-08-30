@@ -82,7 +82,19 @@ struct ContentView: View {
                             tabNavigation.select(section.rawValue)
                         }
                     } label: {
-                        Label(language.text(section.titleKey), systemImage: section.systemImage)
+                        HStack(spacing: 10) {
+                            if UIImage(named: section.systemImage) != nil {
+                                Image(section.systemImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 18, height: 18)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            } else {
+                                Image(systemName: section.systemImage)
+                                    .frame(width: 18)
+                            }
+                            Text(language.text(section.titleKey))
+                        }
                             .fontWeight(section.rawValue == tabNavigation.selectedTab ? .semibold : .regular)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
@@ -178,7 +190,13 @@ private struct CompactTabLabel: View {
 
     @ViewBuilder
     var body: some View {
-        if let image = UIImage(
+        if UIImage(named: systemImage) != nil {
+            Image(systemImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else if let image = UIImage(
             systemName: systemImage,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
         )?.withRenderingMode(.alwaysTemplate) {
@@ -205,7 +223,7 @@ private extension AppSection {
     var systemImage: String {
         switch self {
         case .home: return "house.fill"
-        case .files: return "slider.horizontal.3"
+        case .files: return "AujunpeakLogo"
         case .patches: return "info.circle.fill"
         case .cleaner: return "sparkles"
         case .wallpapers: return "photo.on.rectangle.angled"
@@ -384,10 +402,8 @@ private struct HomeAdminOverlayCard: View {
 }
 
 private struct FunctionOverlayView: View {
-    @AppStorage("aujunpeak.function.one") private var functionOne = false
-    @AppStorage("aujunpeak.function.two") private var functionTwo = false
-    @AppStorage("aujunpeak.function.three") private var functionThree = false
-    @State private var functionOneStatus = "Sẵn sàng"
+    @EnvironmentObject private var licenseSession: LicenseSession
+    @State private var refreshToken = 0
 
     var body: some View {
         NavigationStack {
@@ -398,51 +414,66 @@ private struct FunctionOverlayView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         functionHeader
-
-                        VStack(spacing: 10) {
-                            FunctionSwitchCard(
-                                icon: "bolt.fill",
-                                title: "Auto Setup .3105",
-                                subtitle: functionOneStatus,
-                                isOn: Binding(
-                                    get: { functionOne },
-                                    set: { newValue in
-                                        setFunctionOne(newValue)
-                                    }
-                                )
-                            )
-                            FunctionSwitchCard(
-                                icon: "scope",
-                                title: "Function 02",
-                                subtitle: "Bật / tắt chức năng tùy chỉnh số 2",
-                                isOn: $functionTwo
-                            )
-                            FunctionSwitchCard(
-                                icon: "waveform.path.ecg",
-                                title: "Function 03",
-                                subtitle: "Bật / tắt chức năng tùy chỉnh số 3",
-                                isOn: $functionThree
-                            )
-                        }
-
+                        functionTargetCard
+                        remoteFunctions
                         statusCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
                 }
+                .refreshable {
+                    await licenseSession.refreshStatus()
+                }
             }
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task { await licenseSession.refreshStatus() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
             .onAppear {
-                functionOne = LocalFunctionProfileService.isEnabled
-                functionOneStatus = LocalFunctionProfileService.isEnabled
-                    ? "Profile .3105 đang bật trong app"
-                    : "Bật để kích hoạt profile .3105 trong app"
+                Task { await licenseSession.refreshStatus() }
             }
         }
         .background(Color(uiColor: .systemBackground))
         .zIndex(100)
+    }
+
+    @ViewBuilder
+    private var remoteFunctions: some View {
+        if licenseSession.switches.isEmpty {
+            VStack(spacing: 8) {
+                if licenseSession.lastError == nil {
+                    ProgressView()
+                } else {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.title2)
+                        .foregroundStyle(.orange)
+                }
+                Text(licenseSession.lastError ?? "Đang tải chức năng từ Admin…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(22)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else {
+            VStack(spacing: 10) {
+                ForEach(licenseSession.switches) { item in
+                    RemoteFunctionSwitchCard(item: item) {
+                        refreshToken &+= 1
+                    }
+                }
+            }
+            .id(refreshToken)
+        }
     }
 
     private var functionHeader: some View {
@@ -451,45 +482,99 @@ private struct FunctionOverlayView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [AppTheme.accent, Color.orange.opacity(0.72)],
+                            colors: [Color.red.opacity(0.95), Color.black],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
+                if UIImage(named: "AujunpeakLogo") != nil {
+                    Image("AujunpeakLogo")
+                        .resizable()
+                        .scaledToFill()
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             }
             .frame(width: 64, height: 64)
+            .shadow(color: .red.opacity(0.35), radius: 12, y: 6)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("FUNCTION CENTER")
-                    .font(.system(size: 18, weight: .black, design: .rounded))
-                Text("Aujunpeak iOS")
+                HStack(spacing: 6) {
+                    Text("Hà Văn Huấn")
+                        .font(.system(size: 19, weight: .black, design: .rounded))
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.blue)
+                }
+                Text("Aujunpeak VN")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.accent)
-                Text("Kích hoạt nhanh các tùy chọn của bạn")
+                Text("Chức năng được đồng bộ từ Admin Server")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
         .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(
+            LinearGradient(
+                colors: [Color.white.opacity(0.06), Color.white.opacity(0.03)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
+                .strokeBorder(Color.red.opacity(0.28), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+    }
+
+    private var functionTargetCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.red.opacity(0.18))
+                Image(systemName: "shippingbox.fill")
+                    .foregroundStyle(.red)
+            }
+            .frame(width: 42, height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Target")
+                    .font(.subheadline.weight(.semibold))
+                Text("com.dts.freefireth")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(licenseSession.license?.status.uppercased() ?? "SYNC")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.red)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.1), in: Capsule())
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.red.opacity(0.16), lineWidth: 1)
         }
     }
 
     private var statusCard: some View {
-        HStack(spacing: 10) {
+        let activeCount = licenseSession.switches.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
+        return HStack(spacing: 10) {
             Image(systemName: activeCount > 0 ? "checkmark.seal.fill" : "circle.dashed")
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trạng thái")
                     .font(.subheadline.weight(.semibold))
-                Text("Đang bật \(activeCount)/3 chức năng")
+                Text("Đang bật \(activeCount)/\(licenseSession.switches.count) chức năng")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -507,113 +592,113 @@ private struct FunctionOverlayView: View {
         .padding(14)
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-
-    private var activeCount: Int {
-        [functionOne, functionTwo, functionThree].filter { $0 }.count
-    }
-
-    private func setFunctionOne(_ enabled: Bool) {
-        do {
-            if enabled {
-                try LocalFunctionProfileService.enable()
-                functionOne = true
-                functionOneStatus = "Đã bật profile .3105 • trạng thái đã lưu"
-            } else {
-                try LocalFunctionProfileService.disable()
-                functionOne = false
-                functionOneStatus = "Đã tắt profile .3105 • trạng thái đã gỡ"
-            }
-        } catch {
-            functionOne = LocalFunctionProfileService.isEnabled
-            functionOneStatus = "Không thể cập nhật: \(error.localizedDescription)"
-        }
-    }
 }
 
-/// Quản lý trạng thái Function 01 trong sandbox của chính ứng dụng.
-/// Không thay đổi dữ liệu hay container của ứng dụng khác.
-private enum LocalFunctionProfileService {
-    private static let folderName = "AujunpeakFunctions"
-    private static let markerName = "function01.enabled"
+private struct RemoteFunctionSwitchCard: View {
+    let item: RemoteAdminSwitch
+    let onChange: () -> Void
+    @State private var isOn: Bool
 
-    static var isEnabled: Bool {
-        FileManager.default.fileExists(atPath: markerURL.path)
+    init(item: RemoteAdminSwitch, onChange: @escaping () -> Void) {
+        self.item = item
+        self.onChange = onChange
+        _isOn = State(initialValue: item.enabled && LocalRemoteSwitchService.isEnabled(item))
     }
-
-    static func enable() throws {
-        let fm = FileManager.default
-        try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-        let payload = [
-            "profile=HUẤN HÀ VN.3105",
-            "state=enabled",
-            "updated=\(ISO8601DateFormatter().string(from: Date()))"
-        ].joined(separator: "\n")
-        try Data(payload.utf8).write(to: markerURL, options: .atomic)
-    }
-
-    static func disable() throws {
-        let fm = FileManager.default
-        if fm.fileExists(atPath: markerURL.path) {
-            try fm.removeItem(at: markerURL)
-        }
-    }
-
-    private static var folderURL: URL {
-        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent(folderName, isDirectory: true)
-    }
-
-    private static var markerURL: URL {
-        folderURL.appendingPathComponent(markerName, isDirectory: false)
-    }
-}
-
-private struct FunctionSwitchCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    @Binding var isOn: Bool
 
     var body: some View {
         HStack(spacing: 13) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(isOn ? AppTheme.accent.opacity(0.16) : Color(uiColor: .tertiarySystemFill))
-                Image(systemName: icon)
+                Image(systemName: item.icon.isEmpty ? "bolt.fill" : item.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(isOn ? AppTheme.accent : Color.secondary)
             }
             .frame(width: 42, height: 42)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.body.weight(.semibold))
-                Text(subtitle)
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                Text(item.enabled ? item.subtitle : "Admin đang tắt chức năng này")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(item.enabled ? Color.secondary : Color.orange)
                     .lineLimit(2)
             }
-
             Spacer(minLength: 8)
-
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .tint(AppTheme.accent)
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { newValue in
+                    guard item.enabled else { return }
+                    do {
+                        try LocalRemoteSwitchService.setEnabled(newValue, for: item)
+                        withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
+                        onChange()
+                    } catch {
+                        isOn = LocalRemoteSwitchService.isEnabled(item)
+                    }
+                }
+            ))
+            .labelsHidden()
+            .disabled(!item.enabled)
         }
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(13)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(isOn ? AppTheme.accent.opacity(0.30) : Color.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(isOn ? AppTheme.accent.opacity(0.18) : Color.primary.opacity(0.04), lineWidth: 1)
         }
-        .animation(.easeInOut(duration: 0.18), value: isOn)
+        .opacity(item.enabled ? 1 : 0.65)
+        .onChange(of: item.enabled) { enabled in
+            if !enabled {
+                try? LocalRemoteSwitchService.setEnabled(false, for: item)
+                isOn = false
+                onChange()
+            }
+        }
+    }
+}
+
+/// Lưu trạng thái switch do Admin cấp trong sandbox của chính Aujunpeak VN.
+/// Không ghi dữ liệu vào container của ứng dụng khác.
+private enum LocalRemoteSwitchService {
+    static func isEnabled(_ item: RemoteAdminSwitch) -> Bool {
+        UserDefaults.standard.bool(forKey: storageKey(item))
+    }
+
+    static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch) throws {
+        UserDefaults.standard.set(enabled, forKey: storageKey(item))
+        let fm = FileManager.default
+        let folder = try folderURL()
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        let marker = folder.appendingPathComponent(item.configKey + ".json")
+        if enabled {
+            let payload: [String: Any] = [
+                "config_key": item.configKey,
+                "title": item.title,
+                "enabled": true,
+                "updated_at": ISO8601DateFormatter().string(from: Date())
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
+            try data.write(to: marker, options: .atomic)
+        } else if fm.fileExists(atPath: marker.path) {
+            try fm.removeItem(at: marker)
+        }
+    }
+
+    private static func storageKey(_ item: RemoteAdminSwitch) -> String {
+        "aujunpeak.remote.switch." + item.configKey
+    }
+
+    private static func folderURL() throws -> URL {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("RemoteFunctions", isDirectory: true)
     }
 }
 
 private struct KeyInfoOverlayView: View {
+    @EnvironmentObject private var licenseSession: LicenseSession
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
-    private let displayKey = "AUJUNPEAK-IOS-PREMIUM"
 
     var body: some View {
         NavigationStack {
@@ -626,15 +711,24 @@ private struct KeyInfoOverlayView: View {
                         keyHeader
                         keyDetails
                         deviceDetails
+                        serverDetails
                         adminCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
                 }
+                .refreshable { await licenseSession.refreshStatus() }
             }
             .navigationTitle("Info")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { Task { await licenseSession.refreshStatus() } } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
         }
         .background(Color(uiColor: .systemBackground))
         .zIndex(100)
@@ -646,7 +740,7 @@ private struct KeyInfoOverlayView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.green, Color.mint],
+                            colors: [licenseIsActive ? Color.green : Color.orange, Color.red.opacity(0.8)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -656,41 +750,46 @@ private struct KeyInfoOverlayView: View {
                     .foregroundStyle(.white)
             }
             .frame(width: 66, height: 66)
+            .shadow(color: (licenseIsActive ? Color.green : Color.orange).opacity(0.25), radius: 16, y: 8)
 
             Text("KEY INFORMATION")
                 .font(.system(size: 19, weight: .black, design: .rounded))
-            Text("Thông tin kích hoạt Aujunpeak iOS")
+            Text("Thông tin đồng bộ từ Aujunpeak Admin Server")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Text("ACTIVE")
+            Text(licenseStatusText)
                 .font(.caption.weight(.bold))
-                .foregroundStyle(.green)
+                .foregroundStyle(licenseIsActive ? Color.green : Color.orange)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.green.opacity(0.12), in: Capsule())
+                .background((licenseIsActive ? Color.green : Color.orange).opacity(0.12), in: Capsule())
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.green.opacity(0.20), lineWidth: 1)
+                .strokeBorder((licenseIsActive ? Color.green : Color.orange).opacity(0.20), lineWidth: 1)
         }
     }
 
     private var keyDetails: some View {
         InfoCard(title: "KEY", icon: "key.horizontal.fill") {
-            InfoLine(title: "Key", value: displayKey, monospaced: true)
+            InfoLine(title: "Key", value: licenseSession.license?.key ?? licenseSession.storedKey, monospaced: true)
             Divider()
-            InfoLine(title: "Trạng thái", value: "Đã kích hoạt")
+            InfoLine(title: "Trạng thái", value: licenseStatusText)
             Divider()
-            InfoLine(title: "Gói", value: "Premium")
+            InfoLine(title: "Kích hoạt", value: displayDate(licenseSession.license?.activatedAt))
             Divider()
-            InfoLine(title: "Thời hạn", value: "Vĩnh viễn")
+            InfoLine(title: "Hết hạn", value: displayDate(licenseSession.license?.expiresAt))
+            Divider()
+            InfoLine(title: "Thời hạn", value: "\(licenseSession.license?.durationDays ?? 0) ngày")
+            Divider()
+            InfoLine(title: "Thiết bị", value: "\(licenseSession.license?.deviceCount ?? 0) / \(licenseSession.license?.maxDevices ?? 0)")
 
             Button {
-                UIPasteboard.general.string = displayKey
+                UIPasteboard.general.string = licenseSession.license?.key ?? licenseSession.storedKey
             } label: {
                 Label("Sao chép Key", systemImage: "doc.on.doc")
                     .font(.subheadline.weight(.semibold))
@@ -712,12 +811,40 @@ private struct KeyInfoOverlayView: View {
             InfoLine(title: "Build", value: AppInfo.osBuild, monospaced: true)
             Divider()
             InfoLine(title: "App version", value: AppUpdateChecker.currentVersion)
+            Divider()
+            InfoLine(title: "Device ID", value: licenseSession.deviceID, monospaced: true)
+        }
+    }
+
+    private var serverDetails: some View {
+        InfoCard(title: "SERVER", icon: "server.rack") {
+            InfoLine(title: "API", value: "aujunpeak.store", monospaced: true)
+            Divider()
+            InfoLine(title: "Switch từ Admin", value: "\(licenseSession.switches.count)")
+            Divider()
+            InfoLine(title: "Đồng bộ", value: licenseSession.lastError == nil ? "Đã kết nối" : "Có cảnh báo")
+            if let error = licenseSession.lastError, !error.isEmpty {
+                Divider()
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
     private var adminCard: some View {
         InfoCard(title: "HỖ TRỢ", icon: "person.crop.circle.badge.checkmark") {
-            InfoLine(title: "Admin", value: "Huấn Hà")
+            HStack {
+                Text("Admin").foregroundStyle(.secondary)
+                Spacer()
+                HStack(spacing: 5) {
+                    Text("Hà Văn Huấn")
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.blue)
+                }
+            }
+            Divider()
+            InfoLine(title: "Panel", value: "Aujunpeak VN License")
             Divider()
             InfoLine(title: "Kênh liên hệ", value: "Zalo")
             Link(destination: zaloURL) {
@@ -736,7 +863,44 @@ private struct KeyInfoOverlayView: View {
                     )
             }
             .padding(.top, 4)
+
+            Button(role: .destructive) {
+                licenseSession.forgetKey()
+            } label: {
+                Label("Đổi / đăng xuất Key", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 4)
         }
+    }
+
+    private var licenseIsActive: Bool {
+        licenseSession.license?.status == "active"
+    }
+
+    private var licenseStatusText: String {
+        switch licenseSession.license?.status {
+        case "active": return "ĐANG HOẠT ĐỘNG"
+        case "expired": return "ĐÃ HẾT HẠN"
+        case "revoked": return "ĐÃ BỊ KHÓA"
+        case "unused": return "CHƯA KÍCH HOẠT"
+        default: return licenseSession.storedKey.isEmpty ? "CHƯA CÓ KEY" : "ĐANG ĐỒNG BỘ"
+        }
+    }
+
+    private func displayDate(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "Chưa" }
+        let input = DateFormatter()
+        input.locale = Locale(identifier: "en_US_POSIX")
+        input.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        guard let date = input.date(from: raw) else { return raw }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "vi_VN")
+        output.dateFormat = "dd/MM/yyyy HH:mm"
+        return output.string(from: date)
     }
 }
 

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UIKit
 
@@ -6,6 +7,7 @@ struct ThreeOneOSFiveApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var patchDraftCoordinator = PatchDraftCoordinator()
     @StateObject private var fileOperationCoordinator = FileOperationCoordinator()
+    @StateObject private var licenseSession = LicenseSession()
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
     @State private var showOnboarding = OnboardingStore.shouldShow()
     @State private var showAttribution = false
@@ -35,6 +37,7 @@ struct ThreeOneOSFiveApp: App {
                     .environmentObject(appState)
                     .environmentObject(patchDraftCoordinator)
                     .environmentObject(fileOperationCoordinator)
+                    .environmentObject(licenseSession)
                     .environment(\.appLanguage, language)
                     .environment(\.locale, language.locale)
                     .opacity(showOnboarding ? 0 : 1)
@@ -48,6 +51,7 @@ struct ThreeOneOSFiveApp: App {
                         }
                         appState.detectSupport()
                         checkForUpdate()
+                        Task { await licenseSession.bootstrap() }
                     }
                     .environment(\.appLanguage, language)
                     .environment(\.locale, language.locale)
@@ -71,15 +75,25 @@ struct ThreeOneOSFiveApp: App {
                     }
                 )
             }
+            .fullScreenCover(isPresented: Binding(
+                get: { !showOnboarding && licenseSession.requiresActivation },
+                set: { _ in }
+            )) {
+                LicenseActivationView()
+                    .environmentObject(licenseSession)
+                    .interactiveDismissDisabled(true)
+            }
             .onAppear {
                 if !showOnboarding {
                     appState.detectSupport()
                     checkForUpdate()
+                    Task { await licenseSession.bootstrap() }
                 }
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active, !showOnboarding else { return }
                 appState.detectSupport()
+                Task { await licenseSession.refreshStatus() }
             }
             .onOpenURL { url in
                 patchDraftCoordinator.presentImport(url)
@@ -191,5 +205,285 @@ class AppState: ObservableObject {
                 }
             }
         }
+    }
+}
+
+
+
+// MARK: - Aujunpeak VN License / Admin Server
+
+enum AdminServerConfig {
+    // Upload thư mục `aujunpeak-admin` vào domain/VPS ở cùng đường dẫn này,
+    // hoặc đổi URL tại đây nếu bạn dùng domain/path khác.
+    static let apiBaseURL = URL(string: "https://aujunpeak.store/aujunpeak-admin/api")!
+}
+
+struct RemoteAdminSwitch: Codable, Identifiable, Equatable {
+    let id: Int
+    let configKey: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    let enabled: Bool
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, icon, enabled
+        case configKey = "config_key"
+        case sortOrder = "sort_order"
+    }
+}
+
+struct RemoteLicenseInfo: Codable, Equatable {
+    let key: String
+    let status: String
+    let activatedAt: String?
+    let expiresAt: String?
+    let durationDays: Int
+    let maxDevices: Int
+    let deviceCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case key, status
+        case activatedAt = "activated_at"
+        case expiresAt = "expires_at"
+        case durationDays = "duration_days"
+        case maxDevices = "max_devices"
+        case deviceCount = "device_count"
+    }
+}
+
+private struct LicenseAPIResponse: Codable {
+    let ok: Bool
+    let code: String?
+    let message: String?
+    let license: RemoteLicenseInfo?
+    let switches: [RemoteAdminSwitch]?
+}
+
+@MainActor
+final class LicenseSession: ObservableObject {
+    @Published private(set) var license: RemoteLicenseInfo?
+    @Published private(set) var switches: [RemoteAdminSwitch] = []
+    @Published private(set) var isLoading = false
+    @Published var lastError: String?
+    @Published private(set) var requiresActivation = false
+
+    private let keyStorageKey = "aujunpeak.remote.license.key"
+    private let deviceStorageKey = "aujunpeak.remote.device.id"
+
+    var storedKey: String {
+        UserDefaults.standard.string(forKey: keyStorageKey) ?? ""
+    }
+
+    var deviceID: String {
+        if let value = UserDefaults.standard.string(forKey: deviceStorageKey), !value.isEmpty {
+            return value
+        }
+        let value = UUID().uuidString
+        UserDefaults.standard.set(value, forKey: deviceStorageKey)
+        return value
+    }
+
+    func bootstrap() async {
+        guard !storedKey.isEmpty else {
+            requiresActivation = true
+            return
+        }
+        await refreshStatus()
+    }
+
+    func activate(key: String) async -> Bool {
+        let clean = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else {
+            lastError = "Vui lòng nhập key."
+            return false
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await request(endpoint: "activate.php", key: clean)
+            guard response.ok, let info = response.license else {
+                lastError = response.message ?? "Không thể kích hoạt key."
+                return false
+            }
+            UserDefaults.standard.set(clean, forKey: keyStorageKey)
+            license = info
+            switches = (response.switches ?? []).sorted { $0.sortOrder < $1.sortOrder }
+            lastError = nil
+            requiresActivation = false
+            return true
+        } catch {
+            lastError = "Không kết nối được server: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func refreshStatus() async {
+        guard !storedKey.isEmpty else {
+            requiresActivation = true
+            license = nil
+            switches = []
+            return
+        }
+        do {
+            let response = try await request(endpoint: "status.php", key: storedKey)
+            guard response.ok, let info = response.license else {
+                lastError = response.message ?? "Key không còn hợp lệ."
+                requiresActivation = true
+                license = nil
+                switches = []
+                return
+            }
+            license = info
+            switches = (response.switches ?? []).sorted { $0.sortOrder < $1.sortOrder }
+            requiresActivation = false
+            lastError = nil
+        } catch {
+            // Giữ phiên local nếu chỉ mất mạng tạm thời; không xóa key.
+            lastError = "Mất kết nối server: \(error.localizedDescription)"
+            if license == nil { requiresActivation = true }
+        }
+    }
+
+    func forgetKey() {
+        UserDefaults.standard.removeObject(forKey: keyStorageKey)
+        license = nil
+        switches = []
+        lastError = nil
+        requiresActivation = true
+    }
+
+    private func request(endpoint: String, key: String) async throws -> LicenseAPIResponse {
+        let url = AdminServerConfig.apiBaseURL.appendingPathComponent(endpoint)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "key": key,
+            "device_id": deviceID,
+            "device_name": UIDevice.current.model + " / " + AppInfo.displayMachineName,
+            "app_version": AppUpdateChecker.currentVersion
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard response is HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return try JSONDecoder().decode(LicenseAPIResponse.self, from: data)
+    }
+}
+
+private struct LicenseActivationView: View {
+    @EnvironmentObject private var licenseSession: LicenseSession
+    @State private var keyText = ""
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    colors: [Color.black, Color(red: 0.20, green: 0.02, blue: 0.02)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Spacer(minLength: 40)
+                        logo
+
+                        VStack(spacing: 6) {
+                            Text("KÍCH HOẠT AUJUNPEAK VN")
+                                .font(.system(size: 23, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("Nhập key được cấp từ Admin Hà Văn Huấn")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.68))
+                        }
+
+                        VStack(spacing: 12) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "key.fill").foregroundStyle(.red)
+                                TextField("AJP-XXXXX-XXXXX-XXXXX-XXXXX", text: $keyText)
+                                    .textInputAutocapitalization(.characters)
+                                    .autocorrectionDisabled(true)
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 52)
+                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .strokeBorder(Color.red.opacity(0.30), lineWidth: 1)
+                            }
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "iphone.gen3")
+                                Text("Device ID: \(licenseSession.deviceID.prefix(16))…")
+                            }
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.white.opacity(0.50))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        if let error = licenseSession.lastError, !error.isEmpty {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(Color(red: 1.0, green: 0.48, blue: 0.48))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+
+                        Button {
+                            Task { _ = await licenseSession.activate(key: keyText) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                if licenseSession.isLoading { ProgressView().tint(.white) }
+                                Image(systemName: "checkmark.shield.fill")
+                                Text(licenseSession.isLoading ? "Đang xác thực…" : "Kích hoạt Key")
+                            }
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(
+                                LinearGradient(colors: [Color.red, Color.orange], startPoint: .leading, endPoint: .trailing),
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                        }
+                        .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.55 : 1)
+
+                        VStack(spacing: 6) {
+                            Label("Thời hạn bắt đầu từ lần kích hoạt đầu tiên", systemImage: "calendar.badge.clock")
+                            Label("Giới hạn thiết bị được kiểm soát bởi Admin", systemImage: "iphone.and.arrow.forward")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(22)
+                }
+            }
+        }
+    }
+
+    private var logo: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.red.opacity(0.12))
+            if UIImage(named: "AujunpeakLogo") != nil {
+                Image("AujunpeakLogo")
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 42, weight: .black))
+                    .foregroundStyle(.red)
+            }
+        }
+        .frame(width: 104, height: 104)
+        .shadow(color: .red.opacity(0.38), radius: 26, y: 12)
     }
 }
