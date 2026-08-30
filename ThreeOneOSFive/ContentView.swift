@@ -698,7 +698,6 @@ private enum LocalRemoteSwitchService {
 
     static func statusText(for item: RemoteAdminSwitch) -> String {
         guard let source = try? bundledPatchURL(for: item),
-              let source,
               let data = try? Data(contentsOf: source, options: .mappedIfSafe),
               let summary = try? PatchPackageCodec.inspect(data),
               let decoded = try? PatchPackageCodec.decode(
