@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import CryptoKit
 
 @main
 struct ThreeOneOSFiveApp: App {
@@ -236,7 +237,7 @@ enum AdminServerConfig {
     static let apiBaseURL = URL(string: "http://103.140.249.74:8082/api")!
 }
 
-struct RemoteAdminSwitch: Codable, Identifiable, Equatable {
+struct RemoteAdminSwitch: Codable, Identifiable, Equatable, Sendable {
     let id: Int
     let configKey: String
     let title: String
@@ -244,12 +245,39 @@ struct RemoteAdminSwitch: Codable, Identifiable, Equatable {
     let icon: String
     let enabled: Bool
     let sortOrder: Int
+    let hasPackage: Bool
+    let packageVersion: Int
+    let packageHash: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, subtitle, icon, enabled
         case configKey = "config_key"
         case sortOrder = "sort_order"
+        case hasPackage = "has_package"
+        case packageVersion = "package_version"
+        case packageHash = "package_sha256"
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        configKey = try c.decode(String.self, forKey: .configKey)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "bolt.fill"
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        hasPackage = try c.decodeIfPresent(Bool.self, forKey: .hasPackage) ?? false
+        packageVersion = try c.decodeIfPresent(Int.self, forKey: .packageVersion) ?? 0
+        packageHash = try c.decodeIfPresent(String.self, forKey: .packageHash)
+    }
+}
+
+struct RemotePackagePayload: Sendable {
+    let data: Data
+    let password: String?
+    let sha256: String
+    let version: Int
 }
 
 struct RemoteLicenseInfo: Codable, Equatable {
@@ -395,6 +423,69 @@ final class LicenseSession: ObservableObject {
         lastError = nil
         failureNotice = nil
         requiresActivation = true
+    }
+
+    func downloadPackage(for item: RemoteAdminSwitch) async throws -> RemotePackagePayload {
+        guard item.hasPackage else {
+            throw NSError(
+                domain: "AujunpeakPackage",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Admin chưa gắn dữ liệu chức năng cho nút này."]
+            )
+        }
+        guard !storedKey.isEmpty else {
+            throw NSError(
+                domain: "AujunpeakPackage",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "Phiên key không còn hợp lệ."]
+            )
+        }
+
+        let url = AdminServerConfig.apiBaseURL.appendingPathComponent("package.php")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 25
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "key": storedKey,
+            "device_id": deviceID,
+            "switch_id": item.id,
+            "app_version": AppUpdateChecker.currentVersion
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = object["message"] as? String {
+                throw NSError(domain: "AujunpeakPackage", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
+            }
+            throw NSError(domain: "AujunpeakPackage", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Không thể tải dữ liệu chức năng từ Admin Server."])
+        }
+
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let expected = (item.packageHash ?? http.value(forHTTPHeaderField: "X-Aujunpeak-Package-SHA256") ?? "").lowercased()
+        if !expected.isEmpty && expected != digest.lowercased() {
+            throw NSError(domain: "AujunpeakPackage", code: 422, userInfo: [NSLocalizedDescriptionKey: "Dữ liệu chức năng không khớp chữ ký SHA-256."])
+        }
+
+        var password: String?
+        if let encoded = http.value(forHTTPHeaderField: "X-Aujunpeak-Package-Password-B64"),
+           let passwordData = Data(base64Encoded: encoded),
+           let decodedPassword = String(data: passwordData, encoding: .utf8),
+           !decodedPassword.isEmpty {
+            password = decodedPassword
+        }
+        // Ba package mặc định mới dùng mật khẩu cố định `james`; không hiện prompt cho người dùng.
+        if password == nil && ["builtin_drag", "builtin_nhe", "builtin_magic"].contains(item.configKey) {
+            password = "james"
+        }
+
+        let version = Int(http.value(forHTTPHeaderField: "X-Aujunpeak-Package-Version") ?? "") ?? item.packageVersion
+        return RemotePackagePayload(data: data, password: password, sha256: digest, version: version)
     }
 
     private func failureTitle(for code: String?) -> String {

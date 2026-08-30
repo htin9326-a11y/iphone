@@ -448,40 +448,8 @@ private struct FunctionOverlayView: View {
     @State private var applyPromptItem: RemoteAdminSwitch?
     @State private var patchCenterRoute: PatchCenterRoute?
 
-    private var builtInPatchSwitches: [RemoteAdminSwitch] {
-        [
-            RemoteAdminSwitch(
-                id: -301,
-                configKey: "builtin_drag",
-                title: "Drag Free Fire",
-                subtitle: "Cấu hình kéo tâm Aujunpeak VN",
-                icon: "hand.draw.fill",
-                enabled: true,
-                sortOrder: -300
-            ),
-            RemoteAdminSwitch(
-                id: -302,
-                configKey: "builtin_nhe",
-                title: "Nhẹ Tâm Free Fire",
-                subtitle: "Cấu hình nhẹ tâm Aujunpeak VN",
-                icon: "scope",
-                enabled: true,
-                sortOrder: -290
-            ),
-            RemoteAdminSwitch(
-                id: -303,
-                configKey: "builtin_magic",
-                title: "Magic Free Fire",
-                subtitle: "Cấu hình Magic Aujunpeak VN",
-                icon: "sparkles",
-                enabled: true,
-                sortOrder: -280
-            )
-        ]
-    }
-
     private var allFunctionItems: [RemoteAdminSwitch] {
-        builtInPatchSwitches + licenseSession.switches
+        licenseSession.switches
     }
 
     var body: some View {
@@ -561,14 +529,6 @@ private struct FunctionOverlayView: View {
     @ViewBuilder
     private var remoteFunctions: some View {
         VStack(spacing: 10) {
-            ForEach(builtInPatchSwitches) { item in
-                RemoteFunctionSwitchCard(
-                    item: item,
-                    onChange: { refreshToken &+= 1 },
-                    onRequestApply: { requestedItem in applyPromptItem = requestedItem }
-                )
-            }
-
             ForEach(licenseSession.switches) { item in
                 RemoteFunctionSwitchCard(
                     item: item,
@@ -711,14 +671,13 @@ private struct FunctionOverlayView: View {
 }
 
 private struct RemoteFunctionSwitchCard: View {
+    @EnvironmentObject private var licenseSession: LicenseSession
     let item: RemoteAdminSwitch
     let onChange: () -> Void
     let onRequestApply: (RemoteAdminSwitch) -> Void
     @State private var isOn: Bool
     @State private var operationMessage: String?
     @State private var isBusy = false
-    @State private var showPasswordPrompt = false
-    @State private var passwordText = ""
 
     init(
         item: RemoteAdminSwitch,
@@ -732,7 +691,9 @@ private struct RemoteFunctionSwitchCard: View {
     }
 
     private var displaySubtitle: String {
-        item.subtitle
+        if !item.enabled { return "Admin đang tắt chức năng này" }
+        if item.hasPackage { return item.subtitle }
+        return item.subtitle.isEmpty ? "Chưa có dữ liệu chức năng từ Admin" : item.subtitle
     }
 
     var body: some View {
@@ -753,12 +714,12 @@ private struct RemoteFunctionSwitchCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
-                Text(operationMessage ?? (item.enabled ? displaySubtitle : "Admin đang tắt chức năng này"))
+                Text(operationMessage ?? displaySubtitle)
                     .font(.caption)
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
                     .lineLimit(3)
 
-                if isOn && LocalRemoteSwitchService.hasBundledPatch(for: item) {
+                if isOn && item.hasPackage && LocalRemoteSwitchService.packageID(for: item) != nil {
                     Button {
                         onRequestApply(item)
                     } label: {
@@ -773,43 +734,18 @@ private struct RemoteFunctionSwitchCard: View {
                     .padding(.top, 2)
                 }
             }
+
             Spacer(minLength: 8)
+
             Toggle("", isOn: Binding(
                 get: { isOn },
                 set: { newValue in
                     guard item.enabled, !isBusy else { return }
-                    isBusy = true
-                    operationMessage = newValue ? "Đang chuẩn bị chức năng…" : "Đang tắt chức năng…"
-                    Task {
-                        do {
-                            try await Task.detached(priority: .userInitiated) {
-                                try LocalRemoteSwitchService.setEnabled(newValue, for: item)
-                            }.value
-                            await MainActor.run {
-                                withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
-                                operationMessage = newValue
-                                    ? LocalRemoteSwitchService.statusText(for: item)
-                                    : "Đã tắt chức năng"
-                                isBusy = false
-                                if newValue && LocalRemoteSwitchService.hasBundledPatch(for: item) {
-                                    onRequestApply(item)
-                                }
-                                onChange()
-                            }
-                        } catch {
-                            await MainActor.run {
-                                isOn = LocalRemoteSwitchService.isEnabled(item)
-                                isBusy = false
-                                if newValue, LocalRemoteSwitchService.isPasswordError(error) {
-                                    operationMessage = "Cần xác thực cấu hình"
-                                    showPasswordPrompt = true
-                                } else {
-                                    operationMessage = "Lỗi: \(error.localizedDescription)"
-                                }
-                                onChange()
-                            }
-                        }
+                    if newValue && !item.hasPackage {
+                        operationMessage = "Lỗi: Admin chưa gắn dữ liệu chức năng"
+                        return
                     }
+                    updateSwitch(newValue)
                 }
             ))
             .labelsHidden()
@@ -828,7 +764,7 @@ private struct RemoteFunctionSwitchCard: View {
         .onChange(of: item.enabled) { enabled in
             if !enabled {
                 do {
-                    try LocalRemoteSwitchService.setEnabled(false, for: item)
+                    try LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
                     isOn = false
                     operationMessage = "Admin đã tắt chức năng"
                 } catch {
@@ -837,47 +773,51 @@ private struct RemoteFunctionSwitchCard: View {
                 onChange()
             }
         }
-        .alert("Xác thực cấu hình", isPresented: $showPasswordPrompt) {
-            SecureField("Mật khẩu", text: $passwordText)
-            Button("Hủy", role: .cancel) {
-                passwordText = ""
-                operationMessage = "Đã hủy xác thực"
+        .onChange(of: item.packageVersion) { _ in
+            // Nếu Admin thay package trong khi switch đang bật, tự tải bản mới và giữ flow Apply Patch.
+            if isOn && item.hasPackage && !LocalRemoteSwitchService.matchesInstalledVersion(item) {
+                operationMessage = "Admin vừa cập nhật • đang đồng bộ bản mới…"
+                updateSwitch(true)
             }
-            Button("Tiếp tục") {
-                enableWithPassword()
+        }
+        .onChange(of: item.hasPackage) { hasPackage in
+            if !hasPackage && isOn {
+                try? LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
+                isOn = false
+                operationMessage = "Admin đã gỡ dữ liệu chức năng"
+                onChange()
             }
-        } message: {
-            Text("Cấu hình này được bảo vệ. Chỉ cần nhập mật khẩu một lần trên thiết bị này.")
         }
     }
 
-    private func enableWithPassword() {
-        let suppliedPassword = passwordText
-        guard !suppliedPassword.isEmpty else {
-            operationMessage = "Vui lòng nhập mật khẩu"
-            return
-        }
+    private func updateSwitch(_ newValue: Bool) {
         isBusy = true
-        operationMessage = "Đang xác thực cấu hình…"
+        operationMessage = newValue ? "Đang tải dữ liệu chức năng…" : "Đang tắt chức năng…"
         Task {
             do {
-                try await Task.detached(priority: .userInitiated) {
-                    try LocalRemoteSwitchService.setEnabled(true, for: item, password: suppliedPassword)
-                }.value
+                if newValue {
+                    let package = try await licenseSession.downloadPackage(for: item)
+                    try await Task.detached(priority: .userInitiated) {
+                        try LocalRemoteSwitchService.setEnabled(true, for: item, package: package)
+                    }.value
+                } else {
+                    try await Task.detached(priority: .userInitiated) {
+                        try LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
+                    }.value
+                }
+
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.18)) { isOn = true }
-                    operationMessage = LocalRemoteSwitchService.statusText(for: item)
-                    passwordText = ""
+                    withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
+                    operationMessage = newValue ? LocalRemoteSwitchService.statusText(for: item) : "Đã tắt chức năng"
                     isBusy = false
-                    onRequestApply(item)
+                    if newValue { onRequestApply(item) }
                     onChange()
                 }
             } catch {
                 await MainActor.run {
-                    isOn = false
+                    isOn = LocalRemoteSwitchService.isEnabled(item)
                     isBusy = false
-                    passwordText = ""
-                    operationMessage = "Xác thực không thành công"
+                    operationMessage = "Lỗi: \(error.localizedDescription)"
                     onChange()
                 }
             }
@@ -964,112 +904,74 @@ private struct ApplyPatchPromptView: View {
     }
 }
 
-/// Switch 01/02 nạp package .3105 vào hệ Patch Library/Workspace của chính Aujunpeak VN.
-/// Đồng thời tạo một bản mirror trong Documents/AppDataBrowserImports để kiểm tra package local.
-/// AppDataBrowser thật duyệt container ứng dụng được ContainerStore resolve; thư mục mirror này
-/// không phải container của ứng dụng đích và không được coi là thao tác Apply.
+/// Remote switch tải package chức năng từ Admin Server sau khi key/device được xác thực.
+/// Package không được nhúng trong IPA; bản tải về được lưu bằng complete file protection
+/// trong Application Support/PatchProjects và chỉ tồn tại sau khi người dùng bật chức năng.
 private enum LocalRemoteSwitchService {
-    private static let packagePassword = "huanha"
-
     static func isEnabled(_ item: RemoteAdminSwitch) -> Bool {
         UserDefaults.standard.bool(forKey: storageKey(item)) && localPackageExists(for: item)
     }
 
-    static func statusText(for item: RemoteAdminSwitch) -> String {
-        guard let source = try? bundledPatchURL(for: item),
-              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
-              let summary = try? PatchPackageCodec.inspect(data),
-              let decoded = try? decodePackage(data: data, summary: summary, password: nil) else {
-            return "Cấu hình đã sẵn sàng"
-        }
-        let bundles = decoded.project.allBundleIdentifiers.joined(separator: ", ")
-        return "Sẵn sàng • \(decoded.project.rules.count) rule • \(bundles)"
+    static func matchesInstalledVersion(_ item: RemoteAdminSwitch) -> Bool {
+        UserDefaults.standard.integer(forKey: versionKey(item)) == item.packageVersion
     }
 
-    static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch, password: String? = nil) throws {
+    static func statusText(for item: RemoteAdminSwitch) -> String {
+        guard let projectID = packageID(for: item),
+              let existing = PatchProjectLibrary.load().first(where: { $0.id == projectID }),
+              let project = existing.project else {
+            return "Chức năng đã sẵn sàng"
+        }
+        let bundles = project.allBundleIdentifiers.joined(separator: ", ")
+        return "Sẵn sàng • \(project.rules.count) rule • \(bundles)"
+    }
+
+    static func setEnabled(
+        _ enabled: Bool,
+        for item: RemoteAdminSwitch,
+        package: RemotePackagePayload?
+    ) throws {
         if enabled {
-            try installBundledPackage(for: item, password: password)
+            guard let package else {
+                throw NSError(domain: "AujunpeakPackage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Thiếu dữ liệu chức năng từ Admin Server."])
+            }
+            try installDownloadedPackage(package, for: item)
             try writeMarker(for: item)
             UserDefaults.standard.set(true, forKey: storageKey(item))
+            UserDefaults.standard.set(package.version, forKey: versionKey(item))
+            UserDefaults.standard.set(package.sha256, forKey: hashKey(item))
         } else {
-            try uninstallBundledPackage(for: item)
+            try uninstallDownloadedPackage(for: item)
             try removeMarker(for: item)
             UserDefaults.standard.set(false, forKey: storageKey(item))
+            UserDefaults.standard.removeObject(forKey: versionKey(item))
+            UserDefaults.standard.removeObject(forKey: hashKey(item))
         }
-    }
-
-    static func hasBundledPatch(for item: RemoteAdminSwitch) -> Bool {
-        bundledPatchFilename(for: item) != nil
-    }
-
-    static func isPasswordError(_ error: Error) -> Bool {
-        guard let patchError = error as? PatchPackageError else { return false }
-        if case .invalidPasswordOrCorruptedPackage = patchError { return true }
-        return false
-    }
-
-    static func bundledPatchDisplayName(for item: RemoteAdminSwitch) -> String {
-        bundledPatchFilename(for: item) ?? "Không có package"
     }
 
     static func targetBundleID(for item: RemoteAdminSwitch) -> String {
-        guard let source = try? bundledPatchURL(for: item),
-              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
-              let summary = try? PatchPackageCodec.inspect(data),
-              let decoded = try? decodePackage(data: data, summary: summary, password: nil) else {
+        guard let projectID = packageID(for: item),
+              let project = PatchProjectLibrary.load().first(where: { $0.id == projectID })?.project else {
             return "com.dts.freefireth"
         }
-        return decoded.project.allBundleIdentifiers.first ?? "com.dts.freefireth"
+        return project.allBundleIdentifiers.first ?? "com.dts.freefireth"
     }
 
     static func packageID(for item: RemoteAdminSwitch) -> UUID? {
-        guard let source = try? bundledPatchURL(for: item),
-              let data = try? Data(contentsOf: source, options: .mappedIfSafe),
-              let summary = try? PatchPackageCodec.inspect(data) else {
-            return nil
-        }
-        return summary.packageID
+        guard let raw = UserDefaults.standard.string(forKey: packageIDKey(item)) else { return nil }
+        return UUID(uuidString: raw)
     }
 
-    private static func bundledPatchFilename(for item: RemoteAdminSwitch) -> String? {
-        switch item.configKey {
-        case "builtin_drag": return "drag.3105"
-        case "builtin_nhe": return "nhe.3105"
-        case "builtin_magic": return "magic.3105"
-        case "function_01": return "Bụng.3105"
-        case "function_02": return "Cổ.3105"
-        default: return nil
-        }
-    }
-
-    private static func bundledPatchURL(for item: RemoteAdminSwitch) throws -> URL? {
-        guard let filename = bundledPatchFilename(for: item) else { return nil }
-        let ns = filename as NSString
-        guard let source = Bundle.main.url(
-            forResource: ns.deletingPathExtension,
-            withExtension: ns.pathExtension
-        ) else {
-            throw NSError(
-                domain: "AujunpeakBundledPatch",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Không tìm thấy dữ liệu cấu hình trong app."]
-            )
-        }
-        return source
-    }
-
-    private static func installBundledPackage(for item: RemoteAdminSwitch, password: String?) throws {
-        guard let source = try bundledPatchURL(for: item),
-              let filename = bundledPatchFilename(for: item) else {
-            // Switch không gắn package vẫn được dùng như switch cấu hình local.
-            return
-        }
-
-        let data = try Data(contentsOf: source, options: .mappedIfSafe)
+    private static func installDownloadedPackage(_ package: RemotePackagePayload, for item: RemoteAdminSwitch) throws {
+        let data = package.data
         let summary = try PatchPackageCodec.inspect(data)
-        let decoded = try decodePackage(data: data, summary: summary, password: password)
+        let decoded = try decodePackage(data: data, summary: summary, password: package.password, item: item)
 
-        // Nếu cùng package đã tồn tại thì update tại chỗ để tránh tạo bản trùng.
+        if let previousID = packageID(for: item), previousID != summary.packageID,
+           let previous = PatchProjectLibrary.load().first(where: { $0.id == previousID }) {
+            try? PatchProjectLibrary.delete(previous)
+        }
+
         let existing = PatchProjectLibrary.load().first(where: { $0.id == summary.packageID })
         try PatchProjectLibrary.installImportedPackage(
             data: data,
@@ -1078,20 +980,14 @@ private enum LocalRemoteSwitchService {
             existingURL: existing?.packageURL
         )
         try PatchKeyStore.store(decoded.contentKey, for: summary)
-
-        // Mirror package vào Documents để AppDataBrowser của chính app nhìn thấy file thật.
-        let fm = FileManager.default
-        let browserFolder = try appDataBrowserImportURL()
-        try fm.createDirectory(at: browserFolder, withIntermediateDirectories: true)
-        let mirror = browserFolder.appendingPathComponent(filename)
-        if fm.fileExists(atPath: mirror.path) { try fm.removeItem(at: mirror) }
-        try data.write(to: mirror, options: .atomic)
+        UserDefaults.standard.set(summary.packageID.uuidString, forKey: packageIDKey(item))
     }
 
     private static func decodePackage(
         data: Data,
         summary: PatchPackageSummary,
-        password: String?
+        password: String?,
+        item: RemoteAdminSwitch
     ) throws -> DecodedPatchPackage {
         if let storedKey = try PatchKeyStore.load(for: summary) {
             return try PatchPackageCodec.decode(data, contentKey: storedKey)
@@ -1102,7 +998,14 @@ private enum LocalRemoteSwitchService {
 
         var candidates: [String] = []
         if let password, !password.isEmpty { candidates.append(password) }
-        if !candidates.contains(packagePassword) { candidates.append(packagePassword) }
+        if ["builtin_drag", "builtin_nhe", "builtin_magic"].contains(item.configKey),
+           !candidates.contains("james") {
+            candidates.append("james")
+        }
+        if ["function_01", "function_02"].contains(item.configKey),
+           !candidates.contains("huanha") {
+            candidates.append("huanha")
+        }
         for candidate in candidates {
             if let decoded = try? PatchPackageCodec.decode(data, password: candidate) {
                 return decoded
@@ -1111,29 +1014,17 @@ private enum LocalRemoteSwitchService {
         throw PatchPackageError.invalidPasswordOrCorruptedPackage
     }
 
-    private static func uninstallBundledPackage(for item: RemoteAdminSwitch) throws {
-        if let source = try bundledPatchURL(for: item) {
-            let data = try Data(contentsOf: source, options: .mappedIfSafe)
-            if let summary = try? PatchPackageCodec.inspect(data),
-               let existing = PatchProjectLibrary.load().first(where: { $0.id == summary.packageID }) {
-                try PatchProjectLibrary.delete(existing)
-            }
+    private static func uninstallDownloadedPackage(for item: RemoteAdminSwitch) throws {
+        if let projectID = packageID(for: item),
+           let existing = PatchProjectLibrary.load().first(where: { $0.id == projectID }) {
+            try PatchProjectLibrary.delete(existing)
         }
-
-        if let filename = bundledPatchFilename(for: item) {
-            let mirror = try appDataBrowserImportURL().appendingPathComponent(filename)
-            if FileManager.default.fileExists(atPath: mirror.path) {
-                try FileManager.default.removeItem(at: mirror)
-            }
-        }
+        UserDefaults.standard.removeObject(forKey: packageIDKey(item))
     }
 
     private static func localPackageExists(for item: RemoteAdminSwitch) -> Bool {
-        guard let filename = bundledPatchFilename(for: item),
-              let mirror = try? appDataBrowserImportURL().appendingPathComponent(filename) else {
-            return UserDefaults.standard.bool(forKey: storageKey(item))
-        }
-        return FileManager.default.fileExists(atPath: mirror.path)
+        guard let projectID = packageID(for: item) else { return false }
+        return PatchProjectLibrary.load().contains(where: { $0.id == projectID })
     }
 
     private static func writeMarker(for item: RemoteAdminSwitch) throws {
@@ -1145,11 +1036,11 @@ private enum LocalRemoteSwitchService {
             "config_key": item.configKey,
             "title": item.title,
             "enabled": true,
-            "local_package": bundledPatchFilename(for: item) ?? NSNull(),
+            "package_version": item.packageVersion,
             "updated_at": ISO8601DateFormatter().string(from: Date())
         ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
-        try data.write(to: marker, options: .atomic)
+        try data.write(to: marker, options: [.atomic, .completeFileProtection])
     }
 
     private static func removeMarker(for item: RemoteAdminSwitch) throws {
@@ -1163,16 +1054,24 @@ private enum LocalRemoteSwitchService {
         "aujunpeak.remote.switch." + item.configKey
     }
 
-    private static func markerFolderURL() throws -> URL {
-        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent("RemoteFunctions", isDirectory: true)
+    private static func packageIDKey(_ item: RemoteAdminSwitch) -> String {
+        storageKey(item) + ".packageID"
     }
 
-    private static func appDataBrowserImportURL() throws -> URL {
-        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+    private static func versionKey(_ item: RemoteAdminSwitch) -> String {
+        storageKey(item) + ".version"
+    }
+
+    private static func hashKey(_ item: RemoteAdminSwitch) -> String {
+        storageKey(item) + ".sha256"
+    }
+
+    private static func markerFolderURL() throws -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent("AppDataBrowserImports", isDirectory: true)
+        let folder = base.appendingPathComponent("RemoteFunctions", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
     }
 }
 
