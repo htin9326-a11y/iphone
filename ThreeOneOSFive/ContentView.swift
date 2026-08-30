@@ -190,12 +190,8 @@ private struct CompactTabLabel: View {
 
     @ViewBuilder
     var body: some View {
-        if UIImage(named: systemImage) != nil {
-            Image(systemImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        if let customImage = UIImage(named: systemImage) {
+            Image(uiImage: customImage.withRenderingMode(.alwaysOriginal))
         } else if let image = UIImage(
             systemName: systemImage,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
@@ -223,7 +219,7 @@ private extension AppSection {
     var systemImage: String {
         switch self {
         case .home: return "house.fill"
-        case .files: return "AujunpeakLogo"
+        case .files: return "AujunpeakTabIcon"
         case .patches: return "info.circle.fill"
         case .cleaner: return "sparkles"
         case .wallpapers: return "photo.on.rectangle.angled"
@@ -761,6 +757,7 @@ private struct KeyInfoOverlayView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 30)
                 }
+                .zIndex(2)
                 .refreshable { await licenseSession.refreshStatus() }
             }
             .navigationTitle("Info")
