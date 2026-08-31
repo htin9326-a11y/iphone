@@ -243,6 +243,9 @@ private struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .task {
+                await licenseSession.refreshStatus()
+            }
         }
     }
 
@@ -314,7 +317,11 @@ private struct DashboardView: View {
                         selectedGameKey = game.gameKey
                         onOpenGame(game.gameKey)
                     } label: {
-                        HomeGameCard(game: game, isSelected: selectedGameKey == game.gameKey)
+                        HomeGameCard(
+                            game: game,
+                            iconURL: resolvedIconURL(for: game),
+                            isSelected: selectedGameKey == game.gameKey
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -337,6 +344,16 @@ private struct DashboardView: View {
             merged.append(item)
         }
         return merged.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func resolvedIconURL(for game: RemoteGameSection) -> String? {
+        if let url = game.iconURL?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
+            return url
+        }
+        return licenseSession.switches.first(where: {
+            ($0.gameKey.isEmpty ? "freefire" : $0.gameKey) == game.gameKey &&
+            !($0.gameIconURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        })?.gameIconURL
     }
 }
 
@@ -371,11 +388,12 @@ private struct MiniInfoChip: View {
 
 private struct HomeGameCard: View {
     let game: RemoteGameSection
+    let iconURL: String?
     let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            GameIconView(gameKey: game.gameKey, remoteURL: game.iconURL, size: 56, cornerRadius: 15)
+            GameIconView(gameKey: game.gameKey, remoteURL: iconURL, size: 56, cornerRadius: 15)
             VStack(alignment: .leading, spacing: 4) {
                 Text(game.title)
                     .font(.subheadline.weight(.bold))
@@ -491,6 +509,16 @@ private struct FunctionOverlayView: View {
         return matched
     }
 
+    private func resolvedIconURL(for game: RemoteGameSection) -> String? {
+        if let url = game.iconURL?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
+            return url
+        }
+        return licenseSession.switches.first(where: {
+            ($0.gameKey.isEmpty ? "freefire" : $0.gameKey) == game.gameKey &&
+            !($0.gameIconURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        })?.gameIconURL
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -567,7 +595,7 @@ private struct FunctionOverlayView: View {
                         }
                     } label: {
                         HStack(spacing: 10) {
-                            GameIconView(gameKey: game.gameKey, remoteURL: game.iconURL, size: 42, cornerRadius: 12)
+                            GameIconView(gameKey: game.gameKey, remoteURL: resolvedIconURL(for: game), size: 42, cornerRadius: 12)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(game.title)
                                     .font(.caption.weight(.bold))
@@ -598,7 +626,7 @@ private struct FunctionOverlayView: View {
         VStack(spacing: 10) {
             if visibleSwitches.isEmpty {
                 VStack(spacing: 10) {
-                    GameIconView(gameKey: currentGame.gameKey, remoteURL: currentGame.iconURL, size: 62, cornerRadius: 18)
+                    GameIconView(gameKey: currentGame.gameKey, remoteURL: resolvedIconURL(for: currentGame), size: 62, cornerRadius: 18)
                     Text("Chưa có chức năng cho \(currentGame.title)")
                         .font(.headline.weight(.bold))
                     Text("Admin có thể thêm switch riêng, gắn package .3105 và đồng bộ trực tiếp cho game này.")
@@ -685,7 +713,7 @@ private struct FunctionOverlayView: View {
 
     private var functionTargetCard: some View {
         HStack(spacing: 12) {
-            GameIconView(gameKey: currentGame.gameKey, remoteURL: currentGame.iconURL, size: 42, cornerRadius: 12)
+            GameIconView(gameKey: currentGame.gameKey, remoteURL: resolvedIconURL(for: currentGame), size: 42, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 3) {
                 Text(currentGame.title)
                     .font(.subheadline.weight(.semibold))
@@ -1327,29 +1355,30 @@ private struct GameIconView: View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color.white.opacity(0.06))
-            if let asset = builtinAssetName {
-                Image(asset)
-                    .resizable()
-                    .scaledToFill()
-            } else if let remoteURL, let url = URL(string: remoteURL) {
-                AsyncImage(url: url) { phase in
+
+            if let url = normalizedRemoteURL {
+                AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.18))) { phase in
                     switch phase {
                     case .empty:
-                        ProgressView()
+                        ZStack {
+                            fallbackImage
+                                .opacity(0.34)
+                            ProgressView()
+                                .controlSize(.small)
+                        }
                     case .success(let image):
-                        image.resizable().scaledToFill()
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .transition(.opacity)
                     case .failure:
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: size * 0.35, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
+                        fallbackImage
                     @unknown default:
-                        Image(systemName: "gamecontroller.fill")
+                        fallbackImage
                     }
                 }
             } else {
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: size * 0.35, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
+                fallbackImage
             }
         }
         .frame(width: size, height: size)
@@ -1358,6 +1387,33 @@ private struct GameIconView: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         }
+    }
+
+    @ViewBuilder
+    private var fallbackImage: some View {
+        if let asset = builtinAssetName {
+            Image(asset)
+                .resizable()
+                .scaledToFill()
+        } else {
+            Image(systemName: "gamecontroller.fill")
+                .font(.system(size: size * 0.35, weight: .bold))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
+    private var normalizedRemoteURL: URL? {
+        guard let raw = remoteURL?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        if let direct = URL(string: raw), direct.scheme != nil {
+            return direct
+        }
+        if let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed),
+           let url = URL(string: encoded), url.scheme != nil {
+            return url
+        }
+        return nil
     }
 
     private var builtinAssetName: String? {
