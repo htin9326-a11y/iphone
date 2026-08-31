@@ -477,17 +477,10 @@ private struct HomeAdminOverlayCard: View {
     }
 }
 
-private struct PatchCenterRoute: Identifiable {
-    let id = UUID()
-    let projectID: UUID
-}
-
 private struct FunctionOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var refreshToken = 0
-    @State private var applyPromptItem: RemoteAdminSwitch?
-    @State private var patchCenterRoute: PatchCenterRoute?
 
     private var availableGames: [RemoteGameSection] {
         let defaults = RemoteGameSection.fallbackGames
@@ -556,33 +549,6 @@ private struct FunctionOverlayView: View {
                 Task { await licenseSession.refreshStatus() }
             }
         }
-        .sheet(item: $applyPromptItem) { item in
-            ApplyPatchPromptView(
-                title: item.title,
-                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item, fallback: currentGame.bundleID),
-                onApply: {
-                    let projectID = LocalRemoteSwitchService.packageID(for: item)
-                    applyPromptItem = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                        if let projectID { patchCenterRoute = PatchCenterRoute(projectID: projectID) }
-                    }
-                },
-                onLater: { applyPromptItem = nil }
-            )
-        }
-        .fullScreenCover(item: $patchCenterRoute) { route in
-            ZStack(alignment: .topTrailing) {
-                PatchDirectApplyView(projectID: route.projectID)
-                Button { patchCenterRoute = nil } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(12)
-                }
-                .accessibilityLabel("Đóng")
-                .zIndex(20)
-            }
-        }
     }
 
     private var gameSelector: some View {
@@ -645,9 +611,7 @@ private struct FunctionOverlayView: View {
                 ForEach(visibleSwitches) { item in
                     RemoteFunctionSwitchCard(
                         item: item,
-                        fallbackBundleID: currentGame.bundleID,
-                        onChange: { refreshToken &+= 1 },
-                        onRequestApply: { requestedItem in applyPromptItem = requestedItem }
+                        onChange: { refreshToken &+= 1 }
                     )
                 }
             }
@@ -765,18 +729,14 @@ private struct FunctionOverlayView: View {
 private struct RemoteFunctionSwitchCard: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     let item: RemoteAdminSwitch
-    let fallbackBundleID: String
     let onChange: () -> Void
-    let onRequestApply: (RemoteAdminSwitch) -> Void
     @State private var isOn: Bool
     @State private var operationMessage: String?
     @State private var isBusy = false
 
-    init(item: RemoteAdminSwitch, fallbackBundleID: String, onChange: @escaping () -> Void, onRequestApply: @escaping (RemoteAdminSwitch) -> Void) {
+    init(item: RemoteAdminSwitch, onChange: @escaping () -> Void) {
         self.item = item
-        self.fallbackBundleID = fallbackBundleID
         self.onChange = onChange
-        self.onRequestApply = onRequestApply
         _isOn = State(initialValue: item.enabled && LocalRemoteSwitchService.isEnabled(item))
     }
 
@@ -809,20 +769,6 @@ private struct RemoteFunctionSwitchCard: View {
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
                     .lineLimit(3)
 
-                if isOn && item.hasPackage && LocalRemoteSwitchService.packageID(for: item) != nil {
-                    Button {
-                        onRequestApply(item)
-                    } label: {
-                        Label("Apply Patch", systemImage: "checkmark.shield.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(AppTheme.accent.opacity(0.10), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 2)
-                }
             }
 
             Spacer(minLength: 8)
@@ -886,6 +832,7 @@ private struct RemoteFunctionSwitchCard: View {
                     let package = try await licenseSession.downloadPackage(for: item)
                     try await Task.detached(priority: .userInitiated) {
                         try LocalRemoteSwitchService.setEnabled(true, for: item, package: package)
+                        try LocalRemoteSwitchService.applyInstalledPatch(for: item)
                     }.value
                 } else {
                     try await Task.detached(priority: .userInitiated) {
@@ -895,9 +842,10 @@ private struct RemoteFunctionSwitchCard: View {
 
                 await MainActor.run {
                     withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
-                    operationMessage = newValue ? LocalRemoteSwitchService.statusText(for: item) : "Đã tắt chức năng"
+                    operationMessage = newValue
+                        ? "\(LocalRemoteSwitchService.statusText(for: item)) • Đã tự động Apply Patch"
+                        : "Đã tắt chức năng"
                     isBusy = false
-                    if newValue { onRequestApply(item) }
                     onChange()
                 }
             } catch {
@@ -909,79 +857,6 @@ private struct RemoteFunctionSwitchCard: View {
                 }
             }
         }
-    }
-}
-
-private struct ApplyPatchPromptView: View {
-    let title: String
-    let targetBundleID: String
-    let onApply: () -> Void
-    let onLater: () -> Void
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Capsule()
-                .fill(Color.white.opacity(0.18))
-                .frame(width: 46, height: 5)
-                .padding(.top, 10)
-
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(colors: [Color.red, Color.orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 58, height: 58)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Apply Patch")
-                        .font(.system(size: 20, weight: .black, design: .rounded))
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                    Text("Cấu hình đã sẵn sàng")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-
-            HStack(spacing: 10) {
-                Image(systemName: "shippingbox.fill")
-                    .foregroundStyle(AppTheme.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Target")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(targetBundleID)
-                        .font(.system(.caption, design: .monospaced).weight(.semibold))
-                }
-                Spacer()
-                Label("Sẵn sàng", systemImage: "checkmark.circle.fill")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.green)
-            }
-            .padding(12)
-            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            Button(action: onApply) {
-                Label("Apply Patch", systemImage: "checkmark.shield.fill")
-                    .font(.headline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-
-            Button("Để sau", action: onLater)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 18)
-        .presentationDetents([.height(320)])
-        .presentationDragIndicator(.hidden)
     }
 }
 
@@ -1003,6 +878,23 @@ private enum LocalRemoteSwitchService {
         return "Đã import • \(project.rules.count) rule • \(project.allBundleIdentifiers.first ?? item.gameBundleID ?? "game")"
     }
 
+    static func applyInstalledPatch(for item: RemoteAdminSwitch) throws {
+        guard let projectID = packageID(for: item),
+              let installed = PatchProjectLibrary.load().first(where: { $0.id == projectID }),
+              let baseProject = installed.project else {
+            throw NSError(
+                domain: "AujunpeakPatch",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Không tìm thấy cấu hình patch đã cài."]
+            )
+        }
+
+        let project = installed.summary.schemaVersion >= 2
+            ? try PatchProjectLibrary.synchronizeWorkspace(item: installed)
+            : baseProject
+        _ = try DevicePatchService.apply(project: project)
+    }
+
     static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch, package: RemotePackagePayload?) throws {
         if enabled {
             guard let package else {
@@ -1020,14 +912,6 @@ private enum LocalRemoteSwitchService {
             UserDefaults.standard.removeObject(forKey: versionKey(item))
             UserDefaults.standard.removeObject(forKey: hashKey(item))
         }
-    }
-
-    static func targetBundleID(for item: RemoteAdminSwitch, fallback: String = "com.dts.freefireth") -> String {
-        guard let projectID = packageID(for: item),
-              let project = PatchProjectLibrary.load().first(where: { $0.id == projectID })?.project else {
-            return item.gameBundleID ?? fallback
-        }
-        return project.allBundleIdentifiers.first ?? item.gameBundleID ?? fallback
     }
 
     static func packageID(for item: RemoteAdminSwitch) -> UUID? {
@@ -1157,37 +1041,125 @@ private struct KeyInfoOverlayView: View {
     }
 
     private var keyHeader: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.12, green: 0.05, blue: 0.20),
+                                Color(red: 0.04, green: 0.10, blue: 0.22),
+                                Color.black
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
                 Circle()
-                    .fill(LinearGradient(colors: [licenseIsActive ? Color.green : Color.orange, Color.red.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "key.fill")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
+                    .fill(AppTheme.accent.opacity(0.18))
+                    .frame(width: 210, height: 210)
+                    .blur(radius: 2)
+                    .offset(x: 145, y: -82)
+
+                Circle()
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    .frame(width: 138, height: 138)
+                    .offset(x: 142, y: -54)
+
+                VStack(alignment: .leading, spacing: 17) {
+                    HStack(spacing: 11) {
+                        AppLogo(size: 52)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("AUJUNPEAK VN")
+                                .font(.system(size: 18, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("LICENSE CENTER")
+                                .font(.caption2.weight(.bold))
+                                .tracking(1.4)
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("KEY INFORMATION")
+                                .font(.system(size: 20, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("Thông tin kích hoạt và thiết bị")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.68))
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(licenseStatusText)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(licenseStatusColor)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(licenseStatusColor.opacity(0.16), in: Capsule())
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(licenseStatusColor.opacity(0.30), lineWidth: 1)
+                            }
+                    }
+                }
+                .padding(18)
             }
-            .frame(width: 66, height: 66)
-            .shadow(color: (licenseIsActive ? Color.green : Color.orange).opacity(0.25), radius: 16, y: 8)
+            .frame(height: 168)
 
-            Text("KEY INFORMATION")
-                .font(.system(size: 19, weight: .black, design: .rounded))
-            Text("Thông tin kích hoạt Aujunpeak VN")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                InfoHeroStat(
+                    title: "THIẾT BỊ",
+                    value: "\(licenseSession.license?.deviceCount ?? 0)/\(licenseSession.license?.maxDevices ?? 0)",
+                    icon: "iphone"
+                )
 
-            Text(licenseStatusText)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(licenseIsActive ? Color.green : Color.orange)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background((licenseIsActive ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                Rectangle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 1, height: 30)
+
+                InfoHeroStat(
+                    title: "THỜI HẠN",
+                    value: "\(licenseSession.license?.durationDays ?? 0) ngày",
+                    icon: "calendar"
+                )
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 1, height: 30)
+
+                InfoHeroStat(
+                    title: "VERSION",
+                    value: AppUpdateChecker.currentVersion,
+                    icon: "bolt.fill"
+                )
+            }
+            .padding(.vertical, 14)
+            .background(Color.black.opacity(0.24))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder((licenseIsActive ? Color.green : Color.orange).opacity(0.20), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [AppTheme.accent.opacity(0.62), Color.blue.opacity(0.32), Color.white.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         }
+        .shadow(color: AppTheme.accent.opacity(0.18), radius: 24, y: 10)
     }
 
     private var keyDetails: some View {
@@ -1270,6 +1242,7 @@ private struct KeyInfoOverlayView: View {
     }
 
     private var licenseIsActive: Bool { licenseSession.license?.status == "active" }
+    private var licenseStatusColor: Color { licenseIsActive ? .green : .orange }
 
     private var licenseStatusText: String {
         switch licenseSession.license?.status {
@@ -1291,6 +1264,30 @@ private struct KeyInfoOverlayView: View {
         output.locale = Locale(identifier: "vi_VN")
         output.dateFormat = "dd/MM/yyyy HH:mm"
         return output.string(from: date)
+    }
+}
+
+private struct InfoHeroStat: View {
+    let title: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.accent)
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.7)
+                .foregroundStyle(.white.opacity(0.52))
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -1317,11 +1314,13 @@ private struct InfoCard<Content: View>: View {
             content
         }
         .padding(15)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.05), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         }
+        .shadow(color: Color.black.opacity(0.18), radius: 16, y: 7)
     }
 }
 
