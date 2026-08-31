@@ -1,3 +1,4 @@
+
 import Foundation
 import SwiftUI
 import UIKit
@@ -6,9 +7,9 @@ struct ContentView: View {
     @Environment(\.appLanguage) private var language
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var patchDraftCoordinator: PatchDraftCoordinator
+    @AppStorage(FeatureVisibility.cleanerStorageKey) private var cleanerEnabled = false
+    @AppStorage(FeatureVisibility.wallpapersStorageKey) private var wallpapersEnabled = false
     @State private var tabNavigation: AppTabNavigationState
-    @AppStorage(FeatureVisibility.cleanerStorageKey) private var cleanerEnabled = true
-    @AppStorage(FeatureVisibility.wallpapersStorageKey) private var wallpapersEnabled = true
 
     init() {
 #if targetEnvironment(simulator)
@@ -18,10 +19,6 @@ struct ContentView: View {
             initialTab = 1
         } else if arguments.contains("--simulate-patch-tab") {
             initialTab = 2
-        } else if arguments.contains("--simulate-cleaner-tab") {
-            initialTab = 3
-        } else if arguments.contains("--simulate-wallpaper-tab") {
-            initialTab = 4
         } else {
             initialTab = 0
         }
@@ -42,16 +39,10 @@ struct ContentView: View {
         .tint(AppTheme.accent)
         .imageScale(.small)
         .onChange(of: patchDraftCoordinator.request?.id) { requestID in
-            if requestID != nil { tabNavigation.select(AppSection.patches.rawValue) }
+            if requestID != nil { tabNavigation.select(AppSection.files.rawValue) }
         }
         .onChange(of: patchDraftCoordinator.importRequest?.id) { requestID in
-            if requestID != nil { tabNavigation.select(AppSection.patches.rawValue) }
-        }
-        .onChange(of: cleanerEnabled) { _ in
-            tabNavigation.reconcileSelection(with: featureVisibility)
-        }
-        .onChange(of: wallpapersEnabled) { _ in
-            tabNavigation.reconcileSelection(with: featureVisibility)
+            if requestID != nil { tabNavigation.select(AppSection.files.rawValue) }
         }
         .onAppear {
             tabNavigation.reconcileSelection(with: featureVisibility)
@@ -63,10 +54,7 @@ struct ContentView: View {
             ForEach(featureVisibility.visibleSections) { section in
                 sectionContent(section)
                     .tabItem {
-                        CompactTabLabel(
-                            title: language.text(section.titleKey),
-                            systemImage: section.systemImage
-                        )
+                        CompactTabLabel(title: section.displayTitle, systemImage: section.systemImage)
                     }
                     .tag(section.rawValue)
             }
@@ -93,21 +81,19 @@ struct ContentView: View {
                                 Image(systemName: section.systemImage)
                                     .frame(width: 18)
                             }
-                            Text(language.text(section.titleKey))
+                            Text(section.displayTitle)
                         }
-                            .fontWeight(section.rawValue == tabNavigation.selectedTab ? .semibold : .regular)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                        .fontWeight(section.rawValue == tabNavigation.selectedTab ? .semibold : .regular)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(
                         section.rawValue == tabNavigation.selectedTab
-                            ? AppTheme.accent.opacity(0.14)
-                            : Color.clear
+                        ? AppTheme.accent.opacity(0.14)
+                        : Color.clear
                     )
-                    .accessibilityAddTraits(
-                        section.rawValue == tabNavigation.selectedTab ? .isSelected : []
-                    )
+                    .accessibilityAddTraits(section.rawValue == tabNavigation.selectedTab ? .isSelected : [])
                 }
             }
             .navigationTitle("Aujunpeak VN")
@@ -126,19 +112,18 @@ struct ContentView: View {
             DashboardView(
                 cleanerEnabled: $cleanerEnabled,
                 wallpapersEnabled: $wallpapersEnabled,
-                wallpapersSupported: wallpapersSupported
+                wallpapersSupported: false,
+                onOpenGame: { _ in
+                    tabNavigation.select(AppSection.files.rawValue)
+                }
             )
         case .files:
             ZStack {
-                // Original Files implementation remains mounted underneath.
-                AppDataBrowserView(
-                    tabSession: filesTabSession
-                )
+                AppDataBrowserView(tabSession: filesTabSession)
                 FunctionOverlayView()
             }
         case .patches:
             ZStack {
-                // Original Patches implementation remains mounted underneath.
                 PatchProjectsView()
                 KeyInfoOverlayView()
             }
@@ -164,20 +149,11 @@ struct ContentView: View {
     }
 
     private var featureVisibility: FeatureVisibility {
-        FeatureVisibility(
-            cleanerEnabled: cleanerEnabled,
-            wallpapersEnabled: wallpapersEnabled,
-            wallpapersSupported: wallpapersSupported
-        )
-    }
-
-    private var wallpapersSupported: Bool {
-        WallpaperFeatureSupportPolicy.isSupported(major: AppInfo.versionTuple.major)
+        FeatureVisibility(cleanerEnabled: false, wallpapersEnabled: false, wallpapersSupported: false)
     }
 
     private var selectedVisibleSection: AppSection {
-        guard let section = AppSection(rawValue: tabNavigation.selectedTab),
-              featureVisibility.isVisible(section) else {
+        guard let section = AppSection(rawValue: tabNavigation.selectedTab), featureVisibility.isVisible(section) else {
             return .home
         }
         return section
@@ -206,13 +182,13 @@ private struct CompactTabLabel: View {
 }
 
 private extension AppSection {
-    var titleKey: String {
+    var displayTitle: String {
         switch self {
-        case .home: return "tab.home"
-        case .files: return "tab.files"
-        case .patches: return "tab.patches"
-        case .cleaner: return "tab.cleaner"
-        case .wallpapers: return "tab.wallpapers"
+        case .home: return "Trang chủ"
+        case .files: return "Function"
+        case .patches: return "Info"
+        case .cleaner: return "Cleaner"
+        case .wallpapers: return "Wallpapers"
         }
     }
 
@@ -228,22 +204,29 @@ private extension AppSection {
 }
 
 private struct DashboardView: View {
-    @Environment(\.appLanguage) private var language
-    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var licenseSession: LicenseSession
     @State private var showSettings = false
     @Binding var cleanerEnabled: Bool
     @Binding var wallpapersEnabled: Bool
     let wallpapersSupported: Bool
+    let onOpenGame: (String) -> Void
+    @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                List {
-                    shopBannerSection
-                    deviceSection
-                }
-                .safeAreaInset(edge: .top) {
-                    Color.clear.frame(height: 72)
+                AppNeonBackground()
+                    .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        Color.clear.frame(height: 68)
+                        shopBannerSection
+                        gameGridSection
+                        deviceMiniSection
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 28)
                 }
 
                 HomeAdminOverlayCard()
@@ -252,13 +235,11 @@ private struct DashboardView: View {
                     .zIndex(10)
             }
             .navigationBarTitleDisplayMode(.inline)
-            .tint(AppTheme.accent)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
+                        Image(systemName: "gearshape.fill")
                     }
-                    .accessibilityLabel(language.text("accessibility.open_settings"))
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
@@ -266,116 +247,170 @@ private struct DashboardView: View {
     }
 
     private var shopBannerSection: some View {
-        Section {
-            Link(destination: URL(string: "https://huanha.shop/")!) {
-                ZStack(alignment: .bottomLeading) {
-                    Image("AujunpeakHomeBanner")
+        Link(destination: URL(string: "https://huanha.shop/")!) {
+            ZStack(alignment: .bottomLeading) {
+                if UIImage(named: "AujunpeakPromo") != nil {
+                    Image("AujunpeakPromo")
                         .resizable()
                         .scaledToFill()
-                        .frame(height: 168)
+                        .frame(height: 188)
                         .clipped()
+                } else {
+                    LinearGradient(colors: [Color.blue, Color.black], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .frame(height: 188)
+                }
 
-                    LinearGradient(
-                        colors: [Color.clear, Color.black.opacity(0.72)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                LinearGradient(
+                    colors: [Color.clear, Color.black.opacity(0.84)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
 
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("AUJUNPEAK VN")
-                                .font(.system(size: 18, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                            Text("huanha.shop • Nhấn để truy cập")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.82))
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.right.circle.fill")
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("AUJUNPEAK VN")
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("Panel game • hiệu ứng sáng • nhấn để mở huanha.shop")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.82))
+                    HStack(spacing: 8) {
+                        Label("Shop chính thức", systemImage: "checkmark.seal.fill")
+                        Label("24/7", systemImage: "bolt.fill")
                     }
-                    .padding(14)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.92))
                 }
-                .frame(maxWidth: .infinity)
-                .background(Color.black)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.blue.opacity(0.35), lineWidth: 1)
-                }
-                .shadow(color: Color.blue.opacity(0.18), radius: 18, y: 8)
+                .padding(16)
             }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            .frame(maxWidth: .infinity)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [Color.cyan.opacity(0.75), Color.blue.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+            }
+            .shadow(color: Color.blue.opacity(0.24), radius: 22, y: 10)
         }
+        .buttonStyle(.plain)
     }
 
-    private var featuresSection: some View {
-        Section {
-            Toggle(isOn: $cleanerEnabled) {
-                Label(language.text("tab.cleaner"), systemImage: "sparkles")
-            }
-            if wallpapersSupported {
-                Toggle(isOn: $wallpapersEnabled) {
-                    Label(language.text("tab.wallpapers"), systemImage: "photo.on.rectangle.angled")
-                }
-            }
-        } header: {
-            Text(language.text("dashboard.features"))
-        } footer: {
-            Text(language.text("dashboard.features_footer"))
-        }
-    }
-
-    private var deviceSection: some View {
-        Section {
-            LabeledContent(language.text("dashboard.hardware_model")) {
-                Text(AppInfo.displayMachineName)
-                    .font(.body.monospaced())
-            }
-            LabeledContent(language.text("settings.ios_version")) {
-                Text("\(AppInfo.osVersion) (\(AppInfo.osBuild))")
-                    .font(.body.monospaced())
-            }
+    private var gameGridSection: some View {
+        let games = homeGames
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(language.text("settings.compatibility"))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Game Center")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                    Text("Chạm để mở Function theo từng game")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                Text(language.text(appState.isSupported ? "settings.supported" : "settings.unsupported"))
-                .foregroundStyle(appState.isSupported ? Color.green : Color.red)
             }
 
-            if appState.kernelExploitApplicable && AppInfo.versionTuple.major < 26 {
-                HStack {
-                    Text(language.text("dashboard.kernel_status"))
-                    Spacer()
-                    if appState.kernelExploitRunning {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text(language.text("dashboard.kernel_running"))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Text(language.text(appState.exploitStatus.isSuccess ? "dashboard.kernel_active" : "dashboard.kernel_inactive"))
-                        .foregroundStyle(appState.exploitStatus.isSuccess ? Color.green : Color.secondary)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(games) { game in
+                    Button {
+                        selectedGameKey = game.gameKey
+                        onOpenGame(game.gameKey)
+                    } label: {
+                        HomeGameCard(game: game, isSelected: selectedGameKey == game.gameKey)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-        } header: {
-            Text(language.text("common.device"))
-        } footer: {
-            Text(language.text("settings.supported_range_summary"))
+        }
+    }
+
+    private var deviceMiniSection: some View {
+        HStack(spacing: 12) {
+            MiniInfoChip(icon: "iphone.gen3", title: "Thiết bị", value: AppInfo.displayMachineName)
+            MiniInfoChip(icon: "checkmark.shield.fill", title: "Key", value: licenseSession.license?.status.uppercased() ?? "SYNC")
+        }
+    }
+
+    private var homeGames: [RemoteGameSection] {
+        let defaults = RemoteGameSection.fallbackGames
+        if licenseSession.games.isEmpty { return defaults }
+        var merged = licenseSession.games
+        for item in defaults where !merged.contains(where: { $0.gameKey == item.gameKey }) {
+            merged.append(item)
+        }
+        return merged.sorted { $0.sortOrder < $1.sortOrder }
+    }
+}
+
+private struct MiniInfoChip: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(AppTheme.accent)
+                Text(title)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
         }
     }
 }
 
+private struct HomeGameCard: View {
+    let game: RemoteGameSection
+    let isSelected: Bool
 
-// MARK: - Aujunpeak custom presentation overlays
-// These views intentionally sit above the original Home/Files/Patches UI.
-// The original feature code remains in the project and is not deleted.
+    var body: some View {
+        HStack(spacing: 12) {
+            GameIconView(gameKey: game.gameKey, remoteURL: game.iconURL, size: 56, cornerRadius: 15)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(game.title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(game.bundleID)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                    Text("Mở nhanh")
+                }
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(isSelected ? Color.orange : Color.white.opacity(0.72))
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: isSelected ? [Color.orange.opacity(0.26), Color.red.opacity(0.12)] : [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(isSelected ? Color.orange.opacity(0.42) : Color.white.opacity(0.06), lineWidth: 1)
+        }
+        .shadow(color: isSelected ? Color.orange.opacity(0.18) : .clear, radius: 16, y: 8)
+    }
+}
 
 private struct HomeAdminOverlayCard: View {
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
@@ -384,13 +419,7 @@ private struct HomeAdminOverlayCard: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppTheme.accent, AppTheme.accent.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(LinearGradient(colors: [AppTheme.accent, AppTheme.accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
@@ -417,14 +446,7 @@ private struct HomeAdminOverlayCard: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .frame(height: 36)
-                .background(
-                    LinearGradient(
-                        colors: [Color.blue, Color.cyan],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: Capsule()
-                )
+                .background(LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .leading, endPoint: .trailing), in: Capsule())
             }
         }
         .padding(12)
@@ -433,7 +455,7 @@ private struct HomeAdminOverlayCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
+        .shadow(color: Color.black.opacity(0.18), radius: 18, y: 6)
     }
 }
 
@@ -444,23 +466,41 @@ private struct PatchCenterRoute: Identifiable {
 
 private struct FunctionOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
+    @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var refreshToken = 0
     @State private var applyPromptItem: RemoteAdminSwitch?
     @State private var patchCenterRoute: PatchCenterRoute?
 
-    private var allFunctionItems: [RemoteAdminSwitch] {
-        licenseSession.switches
+    private var availableGames: [RemoteGameSection] {
+        let defaults = RemoteGameSection.fallbackGames
+        if licenseSession.games.isEmpty { return defaults }
+        var merged = licenseSession.games
+        for item in defaults where !merged.contains(where: { $0.gameKey == item.gameKey }) {
+            merged.append(item)
+        }
+        return merged.filter(\.enabled).sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var currentGame: RemoteGameSection {
+        availableGames.first(where: { $0.gameKey == selectedGameKey }) ?? availableGames.first ?? RemoteGameSection.fallbackGames[0]
+    }
+
+    private var visibleSwitches: [RemoteAdminSwitch] {
+        let matched = licenseSession.switches.filter { ($0.gameKey.isEmpty ? "freefire" : $0.gameKey) == currentGame.gameKey }
+        if matched.isEmpty && currentGame.gameKey == "freefire" { return licenseSession.switches }
+        return matched
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(uiColor: .systemBackground)
+                AppNeonBackground()
                     .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 16) {
                         functionHeader
+                        gameSelector
                         functionTargetCard
                         remoteFunctions
                         statusCard
@@ -470,49 +510,42 @@ private struct FunctionOverlayView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 30)
                 }
-                .refreshable {
-                    await licenseSession.refreshStatus()
-                }
+                .refreshable { await licenseSession.refreshStatus() }
             }
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        Task { await licenseSession.refreshStatus() }
-                    } label: {
+                    Button { Task { await licenseSession.refreshStatus() } } label: {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
             }
             .onAppear {
+                if !availableGames.contains(where: { $0.gameKey == selectedGameKey }) {
+                    selectedGameKey = availableGames.first?.gameKey ?? "freefire"
+                }
                 Task { await licenseSession.refreshStatus() }
             }
         }
         .sheet(item: $applyPromptItem) { item in
             ApplyPatchPromptView(
                 title: item.title,
-                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item),
+                targetBundleID: LocalRemoteSwitchService.targetBundleID(for: item, fallback: currentGame.bundleID),
                 onApply: {
                     let projectID = LocalRemoteSwitchService.packageID(for: item)
                     applyPromptItem = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                        if let projectID {
-                            patchCenterRoute = PatchCenterRoute(projectID: projectID)
-                        }
+                        if let projectID { patchCenterRoute = PatchCenterRoute(projectID: projectID) }
                     }
                 },
-                onLater: {
-                    applyPromptItem = nil
-                }
+                onLater: { applyPromptItem = nil }
             )
         }
         .fullScreenCover(item: $patchCenterRoute) { route in
             ZStack(alignment: .topTrailing) {
                 PatchDirectApplyView(projectID: route.projectID)
-                Button {
-                    patchCenterRoute = nil
-                } label: {
+                Button { patchCenterRoute = nil } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -522,19 +555,73 @@ private struct FunctionOverlayView: View {
                 .zIndex(20)
             }
         }
-        .background(Color(uiColor: .systemBackground))
-        .zIndex(100)
     }
 
-    @ViewBuilder
+    private var gameSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(availableGames) { game in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            selectedGameKey = game.gameKey
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            GameIconView(gameKey: game.gameKey, remoteURL: game.iconURL, size: 42, cornerRadius: 12)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(game.title)
+                                    .font(.caption.weight(.bold))
+                                    .lineLimit(1)
+                                Text(game.bundleID)
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 6)
+                        }
+                        .padding(10)
+                        .frame(width: 200, alignment: .leading)
+                        .background((selectedGameKey == game.gameKey ? Color.orange.opacity(0.18) : Color.white.opacity(0.05)), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(selectedGameKey == game.gameKey ? Color.orange.opacity(0.42) : Color.white.opacity(0.05), lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
     private var remoteFunctions: some View {
         VStack(spacing: 10) {
-            ForEach(licenseSession.switches) { item in
-                RemoteFunctionSwitchCard(
-                    item: item,
-                    onChange: { refreshToken &+= 1 },
-                    onRequestApply: { requestedItem in applyPromptItem = requestedItem }
-                )
+            if visibleSwitches.isEmpty {
+                VStack(spacing: 10) {
+                    GameIconView(gameKey: currentGame.gameKey, remoteURL: currentGame.iconURL, size: 62, cornerRadius: 18)
+                    Text("Chưa có chức năng cho \(currentGame.title)")
+                        .font(.headline.weight(.bold))
+                    Text("Admin có thể thêm switch riêng, gắn package .3105 và đồng bộ trực tiếp cho game này.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                }
+            } else {
+                ForEach(visibleSwitches) { item in
+                    RemoteFunctionSwitchCard(
+                        item: item,
+                        fallbackBundleID: currentGame.bundleID,
+                        onChange: { refreshToken &+= 1 },
+                        onRequestApply: { requestedItem in applyPromptItem = requestedItem }
+                    )
+                }
             }
 
             if licenseSession.switches.isEmpty && licenseSession.lastError != nil {
@@ -556,13 +643,7 @@ private struct FunctionOverlayView: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.red.opacity(0.95), Color.black],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(LinearGradient(colors: [Color.red.opacity(0.95), Color.black], startPoint: .topLeading, endPoint: .bottomTrailing))
                 if UIImage(named: "AujunpeakLogo") != nil {
                     Image("AujunpeakLogo")
                         .resizable()
@@ -587,21 +668,14 @@ private struct FunctionOverlayView: View {
                 Text("Aujunpeak VN")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.accent)
-                Text("Trung tâm chức năng Aujunpeak VN")
+                Text("Trung tâm chức năng game")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
         .padding(16)
-        .background(
-            LinearGradient(
-                colors: [Color.white.opacity(0.06), Color.white.opacity(0.03)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
+        .background(LinearGradient(colors: [Color.white.opacity(0.06), Color.white.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.red.opacity(0.28), lineWidth: 1)
@@ -611,18 +685,11 @@ private struct FunctionOverlayView: View {
 
     private var functionTargetCard: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.red.opacity(0.18))
-                Image(systemName: "shippingbox.fill")
-                    .foregroundStyle(.red)
-            }
-            .frame(width: 42, height: 42)
-
+            GameIconView(gameKey: currentGame.gameKey, remoteURL: currentGame.iconURL, size: 42, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Target")
+                Text(currentGame.title)
                     .font(.subheadline.weight(.semibold))
-                Text("com.dts.freefireth")
+                Text(currentGame.bundleID)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
@@ -635,7 +702,7 @@ private struct FunctionOverlayView: View {
                 .background(Color.red.opacity(0.1), in: Capsule())
         }
         .padding(14)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Color.red.opacity(0.16), lineWidth: 1)
@@ -643,14 +710,14 @@ private struct FunctionOverlayView: View {
     }
 
     private var statusCard: some View {
-        let activeCount = allFunctionItems.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
+        let activeCount = visibleSwitches.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
         return HStack(spacing: 10) {
             Image(systemName: activeCount > 0 ? "checkmark.seal.fill" : "circle.dashed")
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trạng thái")
                     .font(.subheadline.weight(.semibold))
-                Text("Đang bật \(activeCount)/\(allFunctionItems.count) chức năng")
+                Text("\(currentGame.title): đang bật \(activeCount)/\(max(visibleSwitches.count, 1)) chức năng")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -660,31 +727,26 @@ private struct FunctionOverlayView: View {
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
-                .background(
-                    (activeCount > 0 ? Color.green : Color.secondary).opacity(0.10),
-                    in: Capsule()
-                )
+                .background((activeCount > 0 ? Color.green : Color.secondary).opacity(0.10), in: Capsule())
         }
         .padding(14)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
 private struct RemoteFunctionSwitchCard: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     let item: RemoteAdminSwitch
+    let fallbackBundleID: String
     let onChange: () -> Void
     let onRequestApply: (RemoteAdminSwitch) -> Void
     @State private var isOn: Bool
     @State private var operationMessage: String?
     @State private var isBusy = false
 
-    init(
-        item: RemoteAdminSwitch,
-        onChange: @escaping () -> Void,
-        onRequestApply: @escaping (RemoteAdminSwitch) -> Void
-    ) {
+    init(item: RemoteAdminSwitch, fallbackBundleID: String, onChange: @escaping () -> Void, onRequestApply: @escaping (RemoteAdminSwitch) -> Void) {
         self.item = item
+        self.fallbackBundleID = fallbackBundleID
         self.onChange = onChange
         self.onRequestApply = onRequestApply
         _isOn = State(initialValue: item.enabled && LocalRemoteSwitchService.isEnabled(item))
@@ -752,15 +814,13 @@ private struct RemoteFunctionSwitchCard: View {
             .disabled(!item.enabled || isBusy)
         }
         .padding(13)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(isOn ? AppTheme.accent.opacity(0.18) : Color.primary.opacity(0.04), lineWidth: 1)
         }
         .opacity(item.enabled ? 1 : 0.65)
-        .onAppear {
-            isOn = item.enabled && LocalRemoteSwitchService.isEnabled(item)
-        }
+        .onAppear { isOn = item.enabled && LocalRemoteSwitchService.isEnabled(item) }
         .onChange(of: item.enabled) { enabled in
             if !enabled {
                 do {
@@ -774,7 +834,6 @@ private struct RemoteFunctionSwitchCard: View {
             }
         }
         .onChange(of: item.packageVersion) { _ in
-            // Nếu Admin thay package trong khi switch đang bật, tự tải bản mới và giữ flow Apply Patch.
             if isOn && item.hasPackage && !LocalRemoteSwitchService.matchesInstalledVersion(item) {
                 operationMessage = "Admin vừa cập nhật • đang đồng bộ bản mới…"
                 updateSwitch(true)
@@ -832,22 +891,16 @@ private struct ApplyPatchPromptView: View {
     let onLater: () -> Void
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 18) {
             Capsule()
-                .fill(Color.secondary.opacity(0.35))
-                .frame(width: 42, height: 5)
-                .padding(.top, 8)
+                .fill(Color.white.opacity(0.18))
+                .frame(width: 46, height: 5)
+                .padding(.top, 10)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.red, Color.orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(LinearGradient(colors: [Color.red, Color.orange], startPoint: .topLeading, endPoint: .bottomTrailing))
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(.white)
@@ -899,14 +952,11 @@ private struct ApplyPatchPromptView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 18)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(320)])
         .presentationDragIndicator(.hidden)
     }
 }
 
-/// Remote switch tải package chức năng từ Admin Server sau khi key/device được xác thực.
-/// Package không được nhúng trong IPA; bản tải về được lưu bằng complete file protection
-/// trong Application Support/PatchProjects và chỉ tồn tại sau khi người dùng bật chức năng.
 private enum LocalRemoteSwitchService {
     static func isEnabled(_ item: RemoteAdminSwitch) -> Bool {
         UserDefaults.standard.bool(forKey: storageKey(item)) && localPackageExists(for: item)
@@ -922,15 +972,10 @@ private enum LocalRemoteSwitchService {
               let project = existing.project else {
             return "Chức năng đã sẵn sàng"
         }
-        let bundles = project.allBundleIdentifiers.joined(separator: ", ")
-        return "Sẵn sàng • \(project.rules.count) rule • \(bundles)"
+        return "Đã import • \(project.rules.count) rule • \(project.allBundleIdentifiers.first ?? item.gameBundleID ?? "game")"
     }
 
-    static func setEnabled(
-        _ enabled: Bool,
-        for item: RemoteAdminSwitch,
-        package: RemotePackagePayload?
-    ) throws {
+    static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch, package: RemotePackagePayload?) throws {
         if enabled {
             guard let package else {
                 throw NSError(domain: "AujunpeakPackage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Thiếu dữ liệu chức năng từ Admin Server."])
@@ -949,12 +994,12 @@ private enum LocalRemoteSwitchService {
         }
     }
 
-    static func targetBundleID(for item: RemoteAdminSwitch) -> String {
+    static func targetBundleID(for item: RemoteAdminSwitch, fallback: String = "com.dts.freefireth") -> String {
         guard let projectID = packageID(for: item),
               let project = PatchProjectLibrary.load().first(where: { $0.id == projectID })?.project else {
-            return "com.dts.freefireth"
+            return item.gameBundleID ?? fallback
         }
-        return project.allBundleIdentifiers.first ?? "com.dts.freefireth"
+        return project.allBundleIdentifiers.first ?? item.gameBundleID ?? fallback
     }
 
     static func packageID(for item: RemoteAdminSwitch) -> UUID? {
@@ -973,22 +1018,12 @@ private enum LocalRemoteSwitchService {
         }
 
         let existing = PatchProjectLibrary.load().first(where: { $0.id == summary.packageID })
-        try PatchProjectLibrary.installImportedPackage(
-            data: data,
-            decoded: decoded,
-            summary: summary,
-            existingURL: existing?.packageURL
-        )
+        try PatchProjectLibrary.installImportedPackage(data: data, decoded: decoded, summary: summary, existingURL: existing?.packageURL)
         try PatchKeyStore.store(decoded.contentKey, for: summary)
         UserDefaults.standard.set(summary.packageID.uuidString, forKey: packageIDKey(item))
     }
 
-    private static func decodePackage(
-        data: Data,
-        summary: PatchPackageSummary,
-        password: String?,
-        item: RemoteAdminSwitch
-    ) throws -> DecodedPatchPackage {
+    private static func decodePackage(data: Data, summary: PatchPackageSummary, password: String?, item: RemoteAdminSwitch) throws -> DecodedPatchPackage {
         if let storedKey = try PatchKeyStore.load(for: summary) {
             return try PatchPackageCodec.decode(data, contentKey: storedKey)
         }
@@ -998,12 +1033,10 @@ private enum LocalRemoteSwitchService {
 
         var candidates: [String] = []
         if let password, !password.isEmpty { candidates.append(password) }
-        if ["builtin_drag", "builtin_nhe", "builtin_magic"].contains(item.configKey),
-           !candidates.contains("james") {
+        if ["builtin_drag", "builtin_nhe", "builtin_magic"].contains(item.configKey), !candidates.contains("james") {
             candidates.append("james")
         }
-        if ["function_01", "function_02"].contains(item.configKey),
-           !candidates.contains("huanha") {
+        if ["function_01", "function_02"].contains(item.configKey), !candidates.contains("huanha") {
             candidates.append("huanha")
         }
         for candidate in candidates {
@@ -1015,8 +1048,7 @@ private enum LocalRemoteSwitchService {
     }
 
     private static func uninstallDownloadedPackage(for item: RemoteAdminSwitch) throws {
-        if let projectID = packageID(for: item),
-           let existing = PatchProjectLibrary.load().first(where: { $0.id == projectID }) {
+        if let projectID = packageID(for: item), let existing = PatchProjectLibrary.load().first(where: { $0.id == projectID }) {
             try PatchProjectLibrary.delete(existing)
         }
         UserDefaults.standard.removeObject(forKey: packageIDKey(item))
@@ -1028,9 +1060,7 @@ private enum LocalRemoteSwitchService {
     }
 
     private static func writeMarker(for item: RemoteAdminSwitch) throws {
-        let fm = FileManager.default
         let folder = try markerFolderURL()
-        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         let marker = folder.appendingPathComponent(item.configKey + ".json")
         let payload: [String: Any] = [
             "config_key": item.configKey,
@@ -1050,25 +1080,13 @@ private enum LocalRemoteSwitchService {
         }
     }
 
-    private static func storageKey(_ item: RemoteAdminSwitch) -> String {
-        "aujunpeak.remote.switch." + item.configKey
-    }
-
-    private static func packageIDKey(_ item: RemoteAdminSwitch) -> String {
-        storageKey(item) + ".packageID"
-    }
-
-    private static func versionKey(_ item: RemoteAdminSwitch) -> String {
-        storageKey(item) + ".version"
-    }
-
-    private static func hashKey(_ item: RemoteAdminSwitch) -> String {
-        storageKey(item) + ".sha256"
-    }
+    private static func storageKey(_ item: RemoteAdminSwitch) -> String { "aujunpeak.remote.switch." + item.configKey }
+    private static func packageIDKey(_ item: RemoteAdminSwitch) -> String { storageKey(item) + ".packageID" }
+    private static func versionKey(_ item: RemoteAdminSwitch) -> String { storageKey(item) + ".version" }
+    private static func hashKey(_ item: RemoteAdminSwitch) -> String { storageKey(item) + ".sha256" }
 
     private static func markerFolderURL() throws -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let folder = base.appendingPathComponent("RemoteFunctions", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
@@ -1082,7 +1100,7 @@ private struct KeyInfoOverlayView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(uiColor: .systemBackground)
+                AppNeonBackground()
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -1096,7 +1114,6 @@ private struct KeyInfoOverlayView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 30)
                 }
-                .zIndex(2)
                 .refreshable { await licenseSession.refreshStatus() }
             }
             .navigationTitle("Info")
@@ -1109,21 +1126,13 @@ private struct KeyInfoOverlayView: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemBackground))
-        .zIndex(100)
     }
 
     private var keyHeader: some View {
         VStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [licenseIsActive ? Color.green : Color.orange, Color.red.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(LinearGradient(colors: [licenseIsActive ? Color.green : Color.orange, Color.red.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: "key.fill")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(.white)
@@ -1215,14 +1224,7 @@ private struct KeyInfoOverlayView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.blue, Color.cyan],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
+                    .background(LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .padding(.top, 4)
 
@@ -1239,9 +1241,7 @@ private struct KeyInfoOverlayView: View {
         }
     }
 
-    private var licenseIsActive: Bool {
-        licenseSession.license?.status == "active"
-    }
+    private var licenseIsActive: Bool { licenseSession.license?.status == "active" }
 
     private var licenseStatusText: String {
         switch licenseSession.license?.status {
@@ -1289,7 +1289,7 @@ private struct InfoCard<Content: View>: View {
             content
         }
         .padding(15)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.05), lineWidth: 1)
@@ -1314,5 +1314,89 @@ private struct InfoLine: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.72)
         }
+    }
+}
+
+private struct GameIconView: View {
+    let gameKey: String
+    let remoteURL: String?
+    let size: CGFloat
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+            if let asset = builtinAssetName {
+                Image(asset)
+                    .resizable()
+                    .scaledToFill()
+            } else if let remoteURL, let url = URL(string: remoteURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: size * 0.35, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.8))
+                    @unknown default:
+                        Image(systemName: "gamecontroller.fill")
+                    }
+                }
+            } else {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: size * 0.35, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    private var builtinAssetName: String? {
+        switch gameKey {
+        case "freefire": return "GameIconFreeFire"
+        case "freefiremax": return "GameIconFreeFireMax"
+        case "pubg": return "GameIconPUBG"
+        case "lienquan": return "GameIconLienQuan"
+        default: return nil
+        }
+    }
+}
+
+private struct AppNeonBackground: View {
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.black
+                if UIImage(named: "AppBackgroundNeon") != nil {
+                    Image("AppBackgroundNeon")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .opacity(0.28)
+                        .blur(radius: 28)
+                }
+                LinearGradient(colors: [Color.black.opacity(0.25), Color.black.opacity(0.75), Color.black.opacity(0.95)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                ForEach(0..<18, id: \.self) { index in
+                    Circle()
+                        .fill(index.isMultiple(of: 2) ? Color.blue.opacity(0.14) : Color.pink.opacity(0.12))
+                        .frame(width: CGFloat(18 + (index % 5) * 12), height: CGFloat(18 + (index % 5) * 12))
+                        .position(
+                            x: CGFloat((index * 41) % Int(max(proxy.size.width, 1))),
+                            y: CGFloat((index * 97) % Int(max(proxy.size.height, 1)))
+                        )
+                        .blur(radius: 2)
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

@@ -130,8 +130,8 @@ enum AppPaths {
 
 enum AppUpdateChecker {
     static let dismissedVersionKey = "update.dismissedVersion"
-    static let apiURL = URL(string: "https://api.github.com/repos/YangJiiii/3105/releases/latest")!
-    static let fallbackURL = URL(string: "https://github.com/YangJiiii/3105/releases/latest")!
+    static let apiURL = AdminServerConfig.apiBaseURL.appendingPathComponent("meta.php")
+    static let fallbackURL = URL(string: "https://huanha.shop/")!
 
     struct Offer: Identifiable {
         let id = UUID()
@@ -151,36 +151,34 @@ enum AppUpdateChecker {
 
     static func check() async -> Offer? {
         var request = URLRequest(url: apiURL)
+        request.httpMethod = "GET"
         request.timeoutInterval = 15
-        request.setValue("3105", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("AujunpeakVN", forHTTPHeaderField: "User-Agent")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 return nil
             }
-            let decoded = try JSONDecoder().decode(GitHubRelease.self, from: data)
-            let remote = normalize(decoded.tagName)
+            let decoded = try JSONDecoder().decode(RemoteMetaResponse.self, from: data)
+            guard decoded.ok, let update = decoded.settings?.update, update.enabled else {
+                return nil
+            }
+            let remote = normalize(update.version)
             guard !remote.isEmpty,
                   isNewer(remote, than: currentVersion),
                   UserDefaults.standard.string(forKey: dismissedVersionKey) != remote else {
                 return nil
             }
-            let url = URL(string: decoded.htmlURL) ?? fallbackURL
+            let url = URL(string: update.url) ?? fallbackURL
             return Offer(version: remote, url: url)
         } catch {
             return nil
         }
     }
 
-    private struct GitHubRelease: Decodable {
-        let tagName: String
-        let htmlURL: String
-
-        enum CodingKeys: String, CodingKey {
-            case tagName = "tag_name"
-            case htmlURL = "html_url"
-        }
+    private struct RemoteMetaResponse: Decodable {
+        let ok: Bool
+        let settings: RemoteClientSettings?
     }
 
     static func normalize(_ version: String) -> String {

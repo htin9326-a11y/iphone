@@ -237,6 +237,32 @@ enum AdminServerConfig {
     static let apiBaseURL = URL(string: "http://103.140.249.74:8082/api")!
 }
 
+
+struct RemoteGameSection: Codable, Identifiable, Equatable, Sendable {
+    let id: Int
+    let gameKey: String
+    let title: String
+    let bundleID: String
+    let iconURL: String?
+    let enabled: Bool
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, enabled
+        case gameKey = "game_key"
+        case bundleID = "bundle_id"
+        case iconURL = "icon_url"
+        case sortOrder = "sort_order"
+    }
+
+    static let fallbackGames: [RemoteGameSection] = [
+        .init(id: 1, gameKey: "freefire", title: "Free Fire", bundleID: "com.dts.freefireth", iconURL: nil, enabled: true, sortOrder: 10),
+        .init(id: 2, gameKey: "freefiremax", title: "Free Fire Max", bundleID: "com.dts.freefiremax", iconURL: nil, enabled: true, sortOrder: 20),
+        .init(id: 3, gameKey: "pubg", title: "PUBG Mobile", bundleID: "com.tencent.ig", iconURL: nil, enabled: true, sortOrder: 30),
+        .init(id: 4, gameKey: "lienquan", title: "Liên Quân", bundleID: "com.garena.game.kgvn", iconURL: nil, enabled: true, sortOrder: 40)
+    ]
+}
+
 struct RemoteAdminSwitch: Codable, Identifiable, Equatable, Sendable {
     let id: Int
     let configKey: String
@@ -248,6 +274,10 @@ struct RemoteAdminSwitch: Codable, Identifiable, Equatable, Sendable {
     let hasPackage: Bool
     let packageVersion: Int
     let packageHash: String?
+    let gameKey: String
+    let gameName: String?
+    let gameBundleID: String?
+    let gameIconURL: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, subtitle, icon, enabled
@@ -256,6 +286,10 @@ struct RemoteAdminSwitch: Codable, Identifiable, Equatable, Sendable {
         case hasPackage = "has_package"
         case packageVersion = "package_version"
         case packageHash = "package_sha256"
+        case gameKey = "game_key"
+        case gameName = "game_name"
+        case gameBundleID = "game_bundle_id"
+        case gameIconURL = "game_icon_url"
     }
 
     init(from decoder: Decoder) throws {
@@ -270,6 +304,10 @@ struct RemoteAdminSwitch: Codable, Identifiable, Equatable, Sendable {
         hasPackage = try c.decodeIfPresent(Bool.self, forKey: .hasPackage) ?? false
         packageVersion = try c.decodeIfPresent(Int.self, forKey: .packageVersion) ?? 0
         packageHash = try c.decodeIfPresent(String.self, forKey: .packageHash)
+        gameKey = try c.decodeIfPresent(String.self, forKey: .gameKey) ?? "freefire"
+        gameName = try c.decodeIfPresent(String.self, forKey: .gameName)
+        gameBundleID = try c.decodeIfPresent(String.self, forKey: .gameBundleID)
+        gameIconURL = try c.decodeIfPresent(String.self, forKey: .gameIconURL)
     }
 }
 
@@ -299,12 +337,31 @@ struct RemoteLicenseInfo: Codable, Equatable {
     }
 }
 
+struct RemoteUpdateConfig: Codable, Equatable, Sendable {
+    let enabled: Bool
+    let version: String
+    let url: String
+    let notes: String?
+}
+
+struct RemoteClientSettings: Codable, Equatable, Sendable {
+    let supportURL: String?
+    let update: RemoteUpdateConfig?
+
+    enum CodingKeys: String, CodingKey {
+        case supportURL = "support_url"
+        case update
+    }
+}
+
 private struct LicenseAPIResponse: Codable {
     let ok: Bool
     let code: String?
     let message: String?
     let license: RemoteLicenseInfo?
     let switches: [RemoteAdminSwitch]?
+    let games: [RemoteGameSection]?
+    let settings: RemoteClientSettings?
 }
 
 struct LicenseFailureNotice: Identifiable, Equatable {
@@ -318,6 +375,8 @@ struct LicenseFailureNotice: Identifiable, Equatable {
 final class LicenseSession: ObservableObject {
     @Published private(set) var license: RemoteLicenseInfo?
     @Published private(set) var switches: [RemoteAdminSwitch] = []
+    @Published private(set) var games: [RemoteGameSection] = []
+    @Published private(set) var clientSettings: RemoteClientSettings?
     @Published private(set) var isLoading = false
     @Published var lastError: String?
     @Published private(set) var requiresActivation = false
@@ -337,6 +396,11 @@ final class LicenseSession: ObservableObject {
         let value = UUID().uuidString
         UserDefaults.standard.set(value, forKey: deviceStorageKey)
         return value
+    }
+
+    var supportURL: URL {
+        if let raw = clientSettings?.supportURL, let url = URL(string: raw) { return url }
+        return URL(string: "https://zalo.me/0833091543")!
     }
 
     func bootstrap() async {
@@ -364,6 +428,8 @@ final class LicenseSession: ObservableObject {
             UserDefaults.standard.set(clean, forKey: keyStorageKey)
             license = info
             switches = (response.switches ?? []).sorted { $0.sortOrder < $1.sortOrder }
+            games = (response.games ?? RemoteGameSection.fallbackGames).sorted { $0.sortOrder < $1.sortOrder }
+            clientSettings = response.settings
             lastError = nil
             requiresActivation = false
             return true
@@ -379,6 +445,7 @@ final class LicenseSession: ObservableObject {
             requiresActivation = true
             license = nil
             switches = []
+            games = RemoteGameSection.fallbackGames
             return
         }
         do {
@@ -388,6 +455,7 @@ final class LicenseSession: ObservableObject {
                 lastError = message
                 license = nil
                 switches = []
+                games = RemoteGameSection.fallbackGames
                 requiresActivation = false
                 failureNotice = LicenseFailureNotice(
                     code: response.code ?? "invalid",
@@ -398,10 +466,11 @@ final class LicenseSession: ObservableObject {
             }
             license = info
             switches = (response.switches ?? []).sorted { $0.sortOrder < $1.sortOrder }
+            games = (response.games ?? RemoteGameSection.fallbackGames).sorted { $0.sortOrder < $1.sortOrder }
+            clientSettings = response.settings
             requiresActivation = false
             lastError = nil
         } catch {
-            // Giữ phiên local nếu chỉ mất mạng tạm thời; không xóa key.
             lastError = "Mất kết nối server: \(error.localizedDescription)"
             if license == nil { requiresActivation = true }
         }
@@ -411,6 +480,7 @@ final class LicenseSession: ObservableObject {
         UserDefaults.standard.removeObject(forKey: keyStorageKey)
         license = nil
         switches = []
+        games = []
         lastError = nil
         failureNotice = nil
         requiresActivation = true
@@ -420,6 +490,7 @@ final class LicenseSession: ObservableObject {
         UserDefaults.standard.removeObject(forKey: keyStorageKey)
         license = nil
         switches = []
+        games = []
         lastError = nil
         failureNotice = nil
         requiresActivation = true
@@ -427,18 +498,10 @@ final class LicenseSession: ObservableObject {
 
     func downloadPackage(for item: RemoteAdminSwitch) async throws -> RemotePackagePayload {
         guard item.hasPackage else {
-            throw NSError(
-                domain: "AujunpeakPackage",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Admin chưa gắn dữ liệu chức năng cho nút này."]
-            )
+            throw NSError(domain: "AujunpeakPackage", code: 404, userInfo: [NSLocalizedDescriptionKey: "Admin chưa gắn dữ liệu chức năng cho nút này."])
         }
         guard !storedKey.isEmpty else {
-            throw NSError(
-                domain: "AujunpeakPackage",
-                code: 401,
-                userInfo: [NSLocalizedDescriptionKey: "Phiên key không còn hợp lệ."]
-            )
+            throw NSError(domain: "AujunpeakPackage", code: 401, userInfo: [NSLocalizedDescriptionKey: "Phiên key không còn hợp lệ."])
         }
 
         let url = AdminServerConfig.apiBaseURL.appendingPathComponent("package.php")
@@ -455,12 +518,9 @@ final class LicenseSession: ObservableObject {
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(http.statusCode) else {
-            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let message = object["message"] as? String {
+            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let message = object["message"] as? String {
                 throw NSError(domain: "AujunpeakPackage", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
             }
             throw NSError(domain: "AujunpeakPackage", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Không thể tải dữ liệu chức năng từ Admin Server."])
@@ -479,7 +539,6 @@ final class LicenseSession: ObservableObject {
            !decodedPassword.isEmpty {
             password = decodedPassword
         }
-        // Ba package mặc định mới dùng mật khẩu cố định `james`; không hiện prompt cho người dùng.
         if password == nil && ["builtin_drag", "builtin_nhe", "builtin_magic"].contains(item.configKey) {
             password = "james"
         }
@@ -516,7 +575,6 @@ final class LicenseSession: ObservableObject {
         return try JSONDecoder().decode(LicenseAPIResponse.self, from: data)
     }
 }
-
 private struct LicenseFailureOverlay: View {
     let notice: LicenseFailureNotice
     let onFinished: () -> Void
