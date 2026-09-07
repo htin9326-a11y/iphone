@@ -51,6 +51,14 @@ Ví dụ muốn thay `Library/Preferences/com.abc.xyz.plist`, hãy đặt file m
 
 Nên đóng ứng dụng đích trong lúc áp dụng hoặc khôi phục patch. Không đổi tên folder bundle và không đưa file ra ngoài folder đó.
 
+## Vòng đời của switch chức năng từ Admin
+
+- Bật switch sẽ tải và kiểm tra gói `.3105`, cài gói local, sau đó **Apply Patch**.
+- Tắt switch sẽ **Restore Originals trước**, dùng đúng journal/backup của lần Apply đang hoạt động. Chỉ khi khôi phục thành công app mới xóa gói local và marker đã bật.
+- Khi Admin cập nhật package trong lúc switch đang bật, app sẽ khôi phục bản cũ trước rồi mới cài và Apply bản mới. Nhờ vậy backup không bị tạo từ một file đã bị patch.
+- Nếu Apply hoặc Restore lỗi, thao tác dừng lại và giữ trạng thái cần thiết để người dùng thử lại; app không tự xóa backup gốc.
+- Sau khi mở app lại, switch chỉ hiển thị **ON** khi còn transaction Apply đang hoạt động, không chỉ vì package vẫn còn trên máy.
+
 ## Xuất, nhập và mật khẩu
 
 - **Xuất** luôn đồng bộ nội dung mới nhất trong workspace trước khi chia sẻ file `.3105`.

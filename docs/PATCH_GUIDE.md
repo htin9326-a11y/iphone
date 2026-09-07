@@ -51,6 +51,14 @@ For example, to replace `Library/Preferences/com.abc.xyz.plist`, put the replace
 
 Keep the target app closed while applying or restoring a patch. Do not rename the bundle folder or move files outside it.
 
+## Admin switch lifecycle
+
+- Turning a switch on downloads and validates the `.3105` package, installs it locally, and then **Apply Patch**.
+- Turning a switch off runs **Restore Originals first**, using the journal and backups owned by the active Apply transaction. The local package and enabled marker are removed only after restore succeeds.
+- If Admin publishes a new package while a switch is on, the current transaction is restored before the replacement package is installed and applied. This prevents a new backup from being made from already-patched files.
+- If Apply or Restore fails, the operation stops and preserves the state needed for a retry; the app does not discard the original backups.
+- After relaunch, a switch is shown as **ON** only while an Apply transaction is active, not merely because its package is still installed.
+
 ## Export, import, and passwords
 
 - **Export** synchronizes the latest workspace contents before sharing the `.3105` file.
