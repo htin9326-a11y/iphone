@@ -17,8 +17,7 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.pageBackground
-                .ignoresSafeArea()
+            AppAuroraBackground()
 
             VStack(spacing: 0) {
                 header
@@ -27,6 +26,7 @@ struct OnboardingView: View {
             }
         }
         .tint(AppTheme.accent)
+        .preferredColorScheme(.dark)
         .animation(.spring(response: 0.38, dampingFraction: 0.84), value: step)
         .animation(.spring(response: 0.38, dampingFraction: 0.84), value: languageCode)
     }

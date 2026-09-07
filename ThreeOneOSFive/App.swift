@@ -659,37 +659,53 @@ private struct LicenseActivationView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
-
-                RadialGradient(
-                    colors: [Color.red.opacity(glow ? 0.24 : 0.10), Color.clear],
-                    center: .top,
-                    startRadius: 20,
-                    endRadius: 420
-                )
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true), value: glow)
+                AppAuroraBackground()
 
                 ScrollView {
                     VStack(spacing: 22) {
-                        Spacer(minLength: 34)
+                        HStack {
+                            AppCapsuleBadge(title: "SECURE ACCESS", icon: "lock.shield.fill", tint: AppTheme.secondaryAccent)
+                            Spacer()
+                            Text("v\(AppUpdateChecker.currentVersion)")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.white.opacity(0.36))
+                        }
+                        .padding(.top, 16)
+
                         logo
 
                         VStack(spacing: 7) {
                             Text("KÍCH HOẠT AUJUNPEAK VN")
                                 .font(.system(size: 24, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
-                            Text("Key được cấp bởi Admin Hà Văn Huấn")
+                            Text("Mở khóa trải nghiệm game của bạn")
                                 .font(.subheadline)
                                 .foregroundStyle(.white.opacity(0.62))
                         }
 
-                        VStack(spacing: 14) {
+                        AppGlassPanel(cornerRadius: 26, tint: AppTheme.accent) {
+                            VStack(spacing: 14) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("LICENSE KEY")
+                                            .font(.caption.weight(.black))
+                                            .tracking(1.4)
+                                            .foregroundStyle(.white.opacity(0.52))
+                                        Text("Nhập key để đồng bộ thiết bị")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(AppTheme.secondaryAccent)
+                                }
+
                             HStack(spacing: 11) {
                                 ZStack {
-                                    Circle().fill(Color.red.opacity(0.14))
+                                    Circle().fill(AppTheme.accent.opacity(0.18))
                                     Image(systemName: "key.fill")
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(AppTheme.accent)
                                 }
                                 .frame(width: 38, height: 38)
 
@@ -701,10 +717,10 @@ private struct LicenseActivationView: View {
                             }
                             .padding(.horizontal, 12)
                             .frame(height: 58)
-                            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .background(Color.black.opacity(0.20), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .strokeBorder(Color.red.opacity(0.34), lineWidth: 1)
+                                    .strokeBorder(AppTheme.accent.opacity(0.42), lineWidth: 1)
                             }
 
                             HStack(spacing: 8) {
@@ -751,16 +767,9 @@ private struct LicenseActivationView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color.red, Color.orange],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    in: RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                )
-                                .shadow(color: .red.opacity(0.22), radius: 16, y: 8)
+                                 .contentShape(Rectangle())
                             }
+                             .buttonStyle(AppGradientButtonStyle(colors: [AppTheme.accent, AppTheme.hotPink]))
                             .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
 
@@ -773,25 +782,21 @@ private struct LicenseActivationView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(Color.blue.opacity(0.18), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                        .strokeBorder(Color.blue.opacity(0.45), lineWidth: 1)
+                                         .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
                                 }
                             }
-                        }
-                        .padding(16)
-                        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+                            }
+                            .padding(16)
                         }
                         .offset(x: shake ? -7 : 0)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("Thời hạn bắt đầu từ lần kích hoạt đầu tiên", systemImage: "calendar.badge.clock")
-                            Label("Thiết bị được quản lý theo key", systemImage: "iphone.and.arrow.forward")
-                            Label("Aujunpeak VN • Secure License", systemImage: "lock.shield.fill")
+                            featureLine("Thời hạn bắt đầu từ lần kích hoạt đầu tiên", icon: "calendar.badge.clock")
+                            featureLine("Thiết bị được quản lý theo key", icon: "iphone.and.arrow.forward")
+                            featureLine("Aujunpeak VN • Secure License", icon: "lock.shield.fill")
                         }
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.48))
@@ -805,10 +810,25 @@ private struct LicenseActivationView: View {
         .onAppear { glow = true }
     }
 
+    private func featureLine(_ title: String, icon: String) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.secondaryAccent)
+                .frame(width: 18)
+            Text(title)
+        }
+    }
+
     private var logo: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.red.opacity(0.10))
+                .fill(
+                    LinearGradient(
+                        colors: [AppTheme.accent.opacity(0.28), AppTheme.hotPink.opacity(0.16)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             if UIImage(named: "AujunpeakLogo") != nil {
                 Image("AujunpeakLogo")
                     .resizable()
@@ -817,10 +837,14 @@ private struct LicenseActivationView: View {
             } else {
                 Image(systemName: "shield.lefthalf.filled")
                     .font(.system(size: 44, weight: .black))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.accent)
             }
         }
         .frame(width: 112, height: 112)
-        .shadow(color: .red.opacity(glow ? 0.46 : 0.22), radius: glow ? 30 : 16, y: 10)
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(AppTheme.accent.opacity(glow ? 0.70 : 0.35), lineWidth: 1.2)
+        }
+        .shadow(color: AppTheme.accent.opacity(glow ? 0.46 : 0.22), radius: glow ? 30 : 16, y: 10)
     }
 }

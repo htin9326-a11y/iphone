@@ -50,15 +50,20 @@ struct ContentView: View {
     }
 
     private var compactLayout: some View {
-        TabView(selection: tabSelection) {
-            ForEach(featureVisibility.visibleSections) { section in
-                sectionContent(section)
-                    .tabItem {
-                        CompactTabLabel(title: section.displayTitle, systemImage: section.systemImage)
+        sectionContent(selectedVisibleSection)
+            .id(selectedVisibleSection.rawValue)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                AppFloatingTabBar(
+                    sections: featureVisibility.visibleSections,
+                    selectedTab: tabNavigation.selectedTab,
+                    onSelect: { section in
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+                            tabNavigation.select(section.rawValue)
+                        }
                     }
-                    .tag(section.rawValue)
+                )
             }
-        }
+            .animation(.easeInOut(duration: 0.24), value: selectedVisibleSection.rawValue)
     }
 
     private var regularLayout: some View {
@@ -95,6 +100,10 @@ struct ContentView: View {
                     )
                     .accessibilityAddTraits(section.rawValue == tabNavigation.selectedTab ? .isSelected : [])
                 }
+            }
+            .scrollContentBackground(.hidden)
+            .background {
+                AppAuroraBackground()
             }
             .navigationTitle("Aujunpeak VN")
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
@@ -181,6 +190,65 @@ private struct CompactTabLabel: View {
     }
 }
 
+private struct AppFloatingTabBar: View {
+    let sections: [AppSection]
+    let selectedTab: Int
+    let onSelect: (AppSection) -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(sections) { section in
+                Button {
+                    onSelect(section)
+                } label: {
+                    VStack(spacing: 5) {
+                        ZStack {
+                            if selectedTab == section.rawValue {
+                                Capsule()
+                                    .fill(AppTheme.accent.opacity(0.22))
+                                    .frame(width: 48, height: 30)
+                                    .matchedGeometryEffect(id: "selected-tab", in: tabNamespace)
+                            }
+                            if let customImage = UIImage(named: section.systemImage) {
+                                Image(uiImage: customImage.withRenderingMode(.alwaysTemplate))
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 17, height: 17)
+                                    .foregroundStyle(selectedTab == section.rawValue ? AppTheme.accent : Color.white.opacity(0.48))
+                            } else {
+                                Image(systemName: section.systemImage)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(selectedTab == section.rawValue ? AppTheme.accent : Color.white.opacity(0.48))
+                            }
+                        }
+                        Text(section.displayTitle)
+                            .font(.system(size: 10, weight: selectedTab == section.rawValue ? .bold : .medium, design: .rounded))
+                            .foregroundStyle(selectedTab == section.rawValue ? .primary : .secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedTab == section.rawValue ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 7)
+        .padding(.bottom, 4)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.09))
+                .frame(height: 1)
+        }
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: selectedTab)
+    }
+
+    @Namespace private var tabNamespace
+}
+
 private extension AppSection {
     var displayTitle: String {
         switch self {
@@ -206,6 +274,7 @@ private extension AppSection {
 private struct DashboardView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @State private var showSettings = false
+    @State private var contentAppeared = false
     @Binding var cleanerEnabled: Bool
     @Binding var wallpapersEnabled: Bool
     let wallpapersSupported: Bool
@@ -227,6 +296,8 @@ private struct DashboardView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 28)
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 14)
                 }
 
                 HomeAdminOverlayCard()
@@ -245,6 +316,11 @@ private struct DashboardView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .task {
                 await licenseSession.refreshStatus()
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.62, dampingFraction: 0.82).delay(0.08)) {
+                    contentAppeared = true
+                }
             }
         }
     }
@@ -481,6 +557,7 @@ private struct FunctionOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var refreshToken = 0
+    @State private var contentAppeared = false
 
     private var availableGames: [RemoteGameSection] {
         let defaults = RemoteGameSection.fallbackGames
@@ -530,6 +607,8 @@ private struct FunctionOverlayView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 12)
                 }
                 .refreshable { await licenseSession.refreshStatus() }
             }
@@ -543,11 +622,15 @@ private struct FunctionOverlayView: View {
                 }
             }
             .onAppear {
+                withAnimation(.spring(response: 0.58, dampingFraction: 0.84).delay(0.05)) {
+                    contentAppeared = true
+                }
                 if !availableGames.contains(where: { $0.gameKey == selectedGameKey }) {
                     selectedGameKey = availableGames.first?.gameKey ?? "freefire"
                 }
                 Task { await licenseSession.refreshStatus() }
             }
+            .animation(.easeInOut(duration: 0.22), value: refreshToken)
         }
     }
 
@@ -797,42 +880,81 @@ private struct RemoteFunctionSwitchCard: View {
         .onAppear { isOn = item.enabled && LocalRemoteSwitchService.isEnabled(item) }
         .onChange(of: item.enabled) { enabled in
             if !enabled {
-                do {
-                    try LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
-                    isOn = false
+                // An Admin-side disable must follow the same safety path as a
+                // user turning the switch off: restore the exact originals
+                // before removing the downloaded package.
+                guard isOn || LocalRemoteSwitchService.hasInstalledState(for: item) else {
                     operationMessage = "Admin đã tắt chức năng"
-                } catch {
-                    operationMessage = "Lỗi: \(error.localizedDescription)"
+                    onChange()
+                    return
                 }
-                onChange()
+                isBusy = true
+                operationMessage = "Admin đã tắt • đang Restore Originals…"
+                Task {
+                    do {
+                        try await Task.detached(priority: .userInitiated) {
+                            try LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
+                        }.value
+                        await MainActor.run {
+                            isOn = false
+                            isBusy = false
+                            operationMessage = "Admin đã tắt • Đã Restore Originals"
+                            onChange()
+                        }
+                    } catch {
+                        await MainActor.run {
+                            isBusy = false
+                            operationMessage = "Lỗi: Không thể Restore Originals — \(error.localizedDescription)"
+                            onChange()
+                        }
+                    }
+                }
             }
         }
         .onChange(of: item.packageVersion) { _ in
             if isOn && item.hasPackage && !LocalRemoteSwitchService.matchesInstalledVersion(item) {
-                operationMessage = "Admin vừa cập nhật • đang đồng bộ bản mới…"
+                operationMessage = "Admin vừa cập nhật • đang Restore bản cũ và Apply bản mới…"
                 updateSwitch(true)
             }
         }
         .onChange(of: item.hasPackage) { hasPackage in
             if !hasPackage && isOn {
-                try? LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
-                isOn = false
-                operationMessage = "Admin đã gỡ dữ liệu chức năng"
-                onChange()
+                isBusy = true
+                operationMessage = "Admin đã gỡ dữ liệu • đang Restore Originals…"
+                Task {
+                    do {
+                        try await Task.detached(priority: .userInitiated) {
+                            try LocalRemoteSwitchService.setEnabled(false, for: item, package: nil)
+                        }.value
+                        await MainActor.run {
+                            isOn = false
+                            isBusy = false
+                            operationMessage = "Admin đã gỡ dữ liệu • Đã Restore Originals"
+                            onChange()
+                        }
+                    } catch {
+                        await MainActor.run {
+                            isBusy = false
+                            operationMessage = "Lỗi: Không thể Restore Originals — \(error.localizedDescription)"
+                            onChange()
+                        }
+                    }
+                }
             }
         }
     }
 
     private func updateSwitch(_ newValue: Bool) {
         isBusy = true
-        operationMessage = newValue ? "Đang tải dữ liệu chức năng…" : "Đang tắt chức năng…"
+        operationMessage = newValue
+            ? "Đang tải dữ liệu chức năng và Apply Patch…"
+            : "Đang Restore Originals…"
         Task {
             do {
                 if newValue {
                     let package = try await licenseSession.downloadPackage(for: item)
                     try await Task.detached(priority: .userInitiated) {
-                        try LocalRemoteSwitchService.setEnabled(true, for: item, package: package)
-                        try LocalRemoteSwitchService.applyInstalledPatch(for: item)
+                        try LocalRemoteSwitchService.enableAndApply(for: item, package: package)
                     }.value
                 } else {
                     try await Task.detached(priority: .userInitiated) {
@@ -844,7 +966,7 @@ private struct RemoteFunctionSwitchCard: View {
                     withAnimation(.easeInOut(duration: 0.18)) { isOn = newValue }
                     operationMessage = newValue
                         ? "\(LocalRemoteSwitchService.statusText(for: item)) • Đã tự động Apply Patch"
-                        : "Đã tắt chức năng"
+                        : "Đã tắt chức năng • Đã Restore Originals"
                     isBusy = false
                     onChange()
                 }
@@ -852,7 +974,9 @@ private struct RemoteFunctionSwitchCard: View {
                 await MainActor.run {
                     isOn = LocalRemoteSwitchService.isEnabled(item)
                     isBusy = false
-                    operationMessage = "Lỗi: \(error.localizedDescription)"
+                    operationMessage = newValue
+                        ? "Lỗi Apply Patch: \(error.localizedDescription)"
+                        : "Lỗi Restore Originals: \(error.localizedDescription)"
                     onChange()
                 }
             }
@@ -862,7 +986,19 @@ private struct RemoteFunctionSwitchCard: View {
 
 private enum LocalRemoteSwitchService {
     static func isEnabled(_ item: RemoteAdminSwitch) -> Bool {
-        UserDefaults.standard.bool(forKey: storageKey(item)) && localPackageExists(for: item)
+        guard UserDefaults.standard.bool(forKey: storageKey(item)),
+              localPackageExists(for: item),
+              let projectID = packageID(for: item) else {
+            return false
+        }
+        // The switch represents the device state, not merely a downloaded
+        // package. A restored journal must therefore make the switch appear
+        // off after relaunch or after a manual restore from Patch Projects.
+        return DevicePatchService.latestReceipt(projectID: projectID) != nil
+    }
+
+    static func hasInstalledState(for item: RemoteAdminSwitch) -> Bool {
+        UserDefaults.standard.bool(forKey: storageKey(item)) || localPackageExists(for: item)
     }
 
     static func matchesInstalledVersion(_ item: RemoteAdminSwitch) -> Bool {
@@ -895,23 +1031,55 @@ private enum LocalRemoteSwitchService {
         _ = try DevicePatchService.apply(project: project)
     }
 
+    /// Installs the downloaded package and applies it as one logical switch-on
+    /// operation. If Apply fails, the package and local enabled marker are
+    /// removed so the UI cannot claim that a non-applied patch is active.
+    static func enableAndApply(for item: RemoteAdminSwitch, package: RemotePackagePayload) throws {
+        do {
+            try setEnabled(true, for: item, package: package)
+            try applyInstalledPatch(for: item)
+        } catch {
+            // This also covers a package-install failure after an older
+            // transaction was restored. Never leave an enabled marker that
+            // does not correspond to an applied transaction.
+            try? setEnabled(false, for: item, package: nil)
+            throw error
+        }
+    }
+
     static func setEnabled(_ enabled: Bool, for item: RemoteAdminSwitch, package: RemotePackagePayload?) throws {
         if enabled {
             guard let package else {
                 throw NSError(domain: "AujunpeakPackage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Thiếu dữ liệu chức năng từ Admin Server."])
             }
+            // A package update must never be applied over the previous
+            // replacement. Restore the transaction that owns the originals
+            // before replacing the local package or creating a new journal.
+            try restoreActivePatch(for: item)
             try installDownloadedPackage(package, for: item)
             try writeMarker(for: item)
             UserDefaults.standard.set(true, forKey: storageKey(item))
             UserDefaults.standard.set(package.version, forKey: versionKey(item))
             UserDefaults.standard.set(package.sha256, forKey: hashKey(item))
         } else {
+            // Restore first. If this throws, keep the package and enabled
+            // marker intact so the user can retry instead of losing the only
+            // safe path back to the originals.
+            try restoreActivePatch(for: item)
             try uninstallDownloadedPackage(for: item)
             try removeMarker(for: item)
             UserDefaults.standard.set(false, forKey: storageKey(item))
             UserDefaults.standard.removeObject(forKey: versionKey(item))
             UserDefaults.standard.removeObject(forKey: hashKey(item))
         }
+    }
+
+    private static func restoreActivePatch(for item: RemoteAdminSwitch) throws {
+        guard let projectID = packageID(for: item),
+              let receipt = DevicePatchService.latestReceipt(projectID: projectID) else {
+            return
+        }
+        try DevicePatchService.restore(receipt: receipt)
     }
 
     static func packageID(for item: RemoteAdminSwitch) -> UUID? {
@@ -931,8 +1099,11 @@ private enum LocalRemoteSwitchService {
 
         let existing = PatchProjectLibrary.load().first(where: { $0.id == summary.packageID })
         try PatchProjectLibrary.installImportedPackage(data: data, decoded: decoded, summary: summary, existingURL: existing?.packageURL)
-        try PatchKeyStore.store(decoded.contentKey, for: summary)
+        // Record the package identity before the Keychain write so the
+        // enableAndApply cleanup path can still find and remove a package if
+        // Keychain storage fails after the file was installed.
         UserDefaults.standard.set(summary.packageID.uuidString, forKey: packageIDKey(item))
+        try PatchKeyStore.store(decoded.contentKey, for: summary)
     }
 
     private static func decodePackage(data: Data, summary: PatchPackageSummary, password: String?, item: RemoteAdminSwitch) throws -> DecodedPatchPackage {
@@ -1007,6 +1178,7 @@ private enum LocalRemoteSwitchService {
 
 private struct KeyInfoOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
+    @State private var contentAppeared = false
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
 
     var body: some View {
@@ -1025,6 +1197,8 @@ private struct KeyInfoOverlayView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 12)
                 }
                 .refreshable { await licenseSession.refreshStatus() }
             }
@@ -1035,6 +1209,11 @@ private struct KeyInfoOverlayView: View {
                     Button { Task { await licenseSession.refreshStatus() } } label: {
                         Image(systemName: "arrow.clockwise")
                     }
+                }
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.58, dampingFraction: 0.84).delay(0.05)) {
+                    contentAppeared = true
                 }
             }
         }
@@ -1430,19 +1609,19 @@ private struct AppNeonBackground: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black
+                AppAuroraBackground()
                 if UIImage(named: "AppBackgroundNeon") != nil {
                     Image("AppBackgroundNeon")
                         .resizable()
                         .scaledToFill()
                         .frame(width: proxy.size.width, height: proxy.size.height)
-                        .opacity(0.28)
+                        .opacity(0.18)
                         .blur(radius: 28)
                 }
-                LinearGradient(colors: [Color.black.opacity(0.25), Color.black.opacity(0.75), Color.black.opacity(0.95)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [Color.black.opacity(0.12), Color.black.opacity(0.52), Color.black.opacity(0.88)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 ForEach(0..<18, id: \.self) { index in
-                    Circle()
-                        .fill(index.isMultiple(of: 2) ? Color.blue.opacity(0.14) : Color.pink.opacity(0.12))
+                    Capsule()
+                        .fill(index.isMultiple(of: 2) ? AppTheme.accent.opacity(0.10) : AppTheme.hotPink.opacity(0.08))
                         .frame(width: CGFloat(18 + (index % 5) * 12), height: CGFloat(18 + (index % 5) * 12))
                         .position(
                             x: CGFloat((index * 41) % Int(max(proxy.size.width, 1))),
