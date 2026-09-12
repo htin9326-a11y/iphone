@@ -781,6 +781,8 @@ private struct LicenseActivationView: View {
         }
     }
 
+    }
+
     private var logo: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
