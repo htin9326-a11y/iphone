@@ -10,6 +10,7 @@ struct ContentView: View {
     @AppStorage(FeatureVisibility.cleanerStorageKey) private var cleanerEnabled = false
     @AppStorage(FeatureVisibility.wallpapersStorageKey) private var wallpapersEnabled = false
     @State private var tabNavigation: AppTabNavigationState
+    @State private var sideMenuExpanded = false
 
     init() {
 #if targetEnvironment(simulator)
@@ -50,20 +51,25 @@ struct ContentView: View {
     }
 
     private var compactLayout: some View {
-        sectionContent(selectedVisibleSection)
-            .id(selectedVisibleSection.rawValue)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                AppFloatingTabBar(
-                    sections: featureVisibility.visibleSections,
-                    selectedTab: tabNavigation.selectedTab,
-                    onSelect: { section in
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                            tabNavigation.select(section.rawValue)
-                        }
-                    }
-                )
-            }
-            .animation(.easeInOut(duration: 0.24), value: selectedVisibleSection.rawValue)
+        ZStack(alignment: .leading) {
+            sectionContent(selectedVisibleSection)
+                .id(selectedVisibleSection.rawValue)
+
+            AppSideNavigation(
+                sections: featureVisibility.visibleSections,
+                selectedTab: tabNavigation.selectedTab,
+                isExpanded: $sideMenuExpanded,
+                onSelect: { section in
+                    tabNavigation.select(section.rawValue)
+                    sideMenuExpanded = false
+                }
+            )
+            .padding(.leading, 8)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .zIndex(20)
+        }
+        .animation(.easeInOut(duration: 0.18), value: selectedVisibleSection.rawValue)
+        .animation(.easeInOut(duration: 0.18), value: sideMenuExpanded)
     }
 
     private var regularLayout: some View {
@@ -105,7 +111,7 @@ struct ContentView: View {
             .background {
                 AppAuroraBackground()
             }
-            .navigationTitle("Aujunpeak VN")
+            .navigationTitle("Aujunpeak")
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             sectionContent(selectedVisibleSection)
@@ -190,63 +196,51 @@ private struct CompactTabLabel: View {
     }
 }
 
-private struct AppFloatingTabBar: View {
+private struct AppSideNavigation: View {
     let sections: [AppSection]
     let selectedTab: Int
+    @Binding var isExpanded: Bool
     let onSelect: (AppSection) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(sections) { section in
-                Button {
-                    onSelect(section)
-                } label: {
-                    VStack(spacing: 5) {
-                        ZStack {
-                            if selectedTab == section.rawValue {
-                                Capsule()
-                                    .fill(AppTheme.accent.opacity(0.22))
-                                    .frame(width: 48, height: 30)
-                                    .matchedGeometryEffect(id: "selected-tab", in: tabNamespace)
-                            }
-                            if let customImage = UIImage(named: section.systemImage) {
-                                Image(uiImage: customImage.withRenderingMode(.alwaysTemplate))
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 17, height: 17)
-                                    .foregroundStyle(selectedTab == section.rawValue ? AppTheme.accent : Color.white.opacity(0.48))
-                            } else {
-                                Image(systemName: section.systemImage)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(selectedTab == section.rawValue ? AppTheme.accent : Color.white.opacity(0.48))
-                            }
-                        }
-                        Text(section.displayTitle)
-                            .font(.system(size: 10, weight: selectedTab == section.rawValue ? .bold : .medium, design: .rounded))
-                            .foregroundStyle(selectedTab == section.rawValue ? .primary : .secondary)
-                            .lineLimit(1)
+        VStack(spacing: 8) {
+            if isExpanded {
+                ForEach(sections) { section in
+                    Button { onSelect(section) } label: {
+                        Image(systemName: section.systemImage)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(selectedTab == section.rawValue ? AppTheme.secondaryAccent : .white.opacity(0.78))
+                            .frame(width: 38, height: 38)
+                            .background(
+                                selectedTab == section.rawValue ? AppTheme.secondaryAccent.opacity(0.18) : Color.black.opacity(0.48),
+                                in: Circle()
+                            )
+                            .overlay { Circle().stroke(Color.white.opacity(0.12), lineWidth: 1) }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(section.displayTitle)
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selectedTab == section.rawValue ? .isSelected : [])
             }
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 7)
-        .padding(.bottom, 4)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.white.opacity(0.09))
-                .frame(height: 1)
-        }
-        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: selectedTab)
-    }
 
-    @Namespace private var tabNamespace
+            Button {
+                isExpanded.toggle()
+            } label: {
+                Image(systemName: isExpanded ? "chevron.left" : "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.accent.opacity(0.88), in: Circle())
+                    .overlay { Circle().stroke(Color.white.opacity(0.18), lineWidth: 1) }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Đóng menu" : "Mở menu")
+        }
+        .padding(6)
+        .background(Color.black.opacity(isExpanded ? 0.32 : 0.12), in: Capsule())
+        .overlay { Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1) }
+        .shadow(color: Color.black.opacity(0.28), radius: 10, y: 4)
+    }
 }
 
 private extension AppSection {
@@ -263,7 +257,7 @@ private extension AppSection {
     var systemImage: String {
         switch self {
         case .home: return "house.fill"
-        case .files: return "AujunpeakTabIcon"
+        case .files: return "gearshape.2.fill"
         case .patches: return "info.circle.fill"
         case .cleaner: return "sparkles"
         case .wallpapers: return "photo.on.rectangle.angled"
@@ -492,17 +486,19 @@ private struct HomeGameCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: isSelected ? [Color.orange.opacity(0.26), Color.red.opacity(0.12)] : [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                colors: isSelected
+                    ? [Color.orange.opacity(0.30), Color.red.opacity(0.16)]
+                    : [Color.white.opacity(0.12), Color.white.opacity(0.055)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(isSelected ? Color.orange.opacity(0.42) : Color.white.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(isSelected ? Color.orange.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 1)
         }
-        .shadow(color: isSelected ? Color.orange.opacity(0.18) : .clear, radius: 16, y: 8)
+        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
     }
 }
 
@@ -544,12 +540,12 @@ private struct HomeAdminOverlayCard: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
+                .strokeBorder(AppTheme.secondaryAccent.opacity(0.30), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.18), radius: 18, y: 6)
+        .shadow(color: Color.black.opacity(0.24), radius: 10, y: 5)
     }
 }
 
@@ -1235,17 +1231,6 @@ private struct KeyInfoOverlayView: View {
                         )
                     )
 
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.18))
-                    .frame(width: 210, height: 210)
-                    .blur(radius: 2)
-                    .offset(x: 145, y: -82)
-
-                Circle()
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                    .frame(width: 138, height: 138)
-                    .offset(x: 142, y: -54)
-
                 VStack(alignment: .leading, spacing: 17) {
                     HStack(spacing: 11) {
                         AppLogo(size: 52)
@@ -1262,9 +1247,9 @@ private struct KeyInfoOverlayView: View {
 
                         Spacer()
 
-                        Image(systemName: "sparkles")
+                        Image(systemName: "checkmark.shield.fill")
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(AppTheme.accent)
+                            .foregroundStyle(AppTheme.secondaryAccent)
                     }
 
                     HStack(alignment: .bottom, spacing: 12) {
@@ -1338,7 +1323,7 @@ private struct KeyInfoOverlayView: View {
                     lineWidth: 1
                 )
         }
-        .shadow(color: AppTheme.accent.opacity(0.18), radius: 24, y: 10)
+        .shadow(color: Color.black.opacity(0.22), radius: 10, y: 5)
     }
 
     private var keyDetails: some View {
@@ -1484,22 +1469,34 @@ private struct InfoCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundStyle(AppTheme.accent)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(AppTheme.secondaryAccent.opacity(0.14))
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.secondaryAccent)
+                }
+                .frame(width: 28, height: 28)
                 Text(title)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .tracking(0.7)
+                    .foregroundStyle(.white.opacity(0.72))
             }
             content
         }
         .padding(15)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.18), radius: 16, y: 7)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(AppTheme.secondaryAccent)
+                .frame(width: 3)
+                .padding(.vertical, 16)
+        }
+        .shadow(color: Color.black.opacity(0.22), radius: 10, y: 5)
     }
 }
 
@@ -1609,26 +1606,16 @@ private struct AppNeonBackground: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                AppAuroraBackground()
+                AppTheme.darkCanvas
                 if UIImage(named: "AppBackgroundNeon") != nil {
                     Image("AppBackgroundNeon")
                         .resizable()
                         .scaledToFill()
                         .frame(width: proxy.size.width, height: proxy.size.height)
-                        .opacity(0.18)
-                        .blur(radius: 28)
+                        .clipped()
+                        .opacity(0.44)
                 }
-                LinearGradient(colors: [Color.black.opacity(0.12), Color.black.opacity(0.52), Color.black.opacity(0.88)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                ForEach(0..<18, id: \.self) { index in
-                    Capsule()
-                        .fill(index.isMultiple(of: 2) ? AppTheme.accent.opacity(0.10) : AppTheme.hotPink.opacity(0.08))
-                        .frame(width: CGFloat(18 + (index % 5) * 12), height: CGFloat(18 + (index % 5) * 12))
-                        .position(
-                            x: CGFloat((index * 41) % Int(max(proxy.size.width, 1))),
-                            y: CGFloat((index * 97) % Int(max(proxy.size.height, 1)))
-                        )
-                        .blur(radius: 2)
-                }
+                LinearGradient(colors: [Color.black.opacity(0.16), Color.black.opacity(0.54), Color.black.opacity(0.90)], startPoint: .topLeading, endPoint: .bottomTrailing)
             }
         }
         .allowsHitTesting(false)

@@ -653,7 +653,6 @@ private struct LicenseActivationView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
     @State private var keyText = ""
-    @State private var glow = false
     @State private var shake = false
 
     var body: some View {
@@ -662,28 +661,10 @@ private struct LicenseActivationView: View {
                 AppAuroraBackground()
 
                 ScrollView {
-                    VStack(spacing: 22) {
-                        HStack {
-                            AppCapsuleBadge(title: "SECURE ACCESS", icon: "lock.shield.fill", tint: AppTheme.secondaryAccent)
-                            Spacer()
-                            Text("v\(AppUpdateChecker.currentVersion)")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.white.opacity(0.36))
-                        }
-                        .padding(.top, 16)
-
+                    VStack(spacing: 18) {
                         logo
 
-                        VStack(spacing: 7) {
-                            Text("KÍCH HOẠT AUJUNPEAK VN")
-                                .font(.system(size: 24, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                            Text("Mở khóa trải nghiệm game của bạn")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.62))
-                        }
-
-                        AppGlassPanel(cornerRadius: 26, tint: AppTheme.accent) {
+                        AppGlassPanel(cornerRadius: 20, tint: AppTheme.secondaryAccent) {
                             VStack(spacing: 14) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -767,9 +748,9 @@ private struct LicenseActivationView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                 .contentShape(Rectangle())
+                                .contentShape(Rectangle())
                             }
-                             .buttonStyle(AppGradientButtonStyle(colors: [AppTheme.accent, AppTheme.hotPink]))
+                            .buttonStyle(AppGradientButtonStyle(colors: [AppTheme.secondaryAccent, AppTheme.accent]))
                             .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
 
@@ -788,34 +769,15 @@ private struct LicenseActivationView: View {
                                          .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
                                 }
                             }
-                            }
                             .padding(16)
                         }
                         .offset(x: shake ? -7 : 0)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            featureLine("Thời hạn bắt đầu từ lần kích hoạt đầu tiên", icon: "calendar.badge.clock")
-                            featureLine("Thiết bị được quản lý theo key", icon: "iphone.and.arrow.forward")
-                            featureLine("Aujunpeak VN • Secure License", icon: "lock.shield.fill")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.48))
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.horizontal, 22)
-                    .padding(.bottom, 30)
+                    .padding(.top, 28)
+                    .padding(.bottom, 24)
                 }
             }
-        }
-        .onAppear { glow = true }
-    }
-
-    private func featureLine(_ title: String, icon: String) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon)
-                .foregroundStyle(AppTheme.secondaryAccent)
-                .frame(width: 18)
-            Text(title)
         }
     }
 
@@ -843,8 +805,8 @@ private struct LicenseActivationView: View {
         .frame(width: 112, height: 112)
         .overlay {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(AppTheme.accent.opacity(glow ? 0.70 : 0.35), lineWidth: 1.2)
+                .strokeBorder(AppTheme.secondaryAccent.opacity(0.52), lineWidth: 1)
         }
-        .shadow(color: AppTheme.accent.opacity(glow ? 0.46 : 0.22), radius: glow ? 30 : 16, y: 10)
+        .shadow(color: Color.black.opacity(0.26), radius: 12, y: 6)
     }
 }

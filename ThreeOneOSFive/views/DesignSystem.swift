@@ -8,13 +8,13 @@ enum AppTheme {
                 : UIColor(red: 0.32, green: 0.24, blue: 0.82, alpha: 1.00)
         }
     )
-    static let secondaryAccent = Color(red: 0.12, green: 0.84, blue: 0.72)
-    static let hotPink = Color(red: 1.00, green: 0.28, blue: 0.58)
+    static let secondaryAccent = Color(red: 0.28, green: 0.78, blue: 0.96)
+    static let hotPink = Color(red: 0.96, green: 0.32, blue: 0.40)
     static let pageBackground = Color(uiColor: .systemBackground)
     static let consoleBackground = Color(uiColor: .secondarySystemBackground)
     static let darkCanvas = Color(red: 0.035, green: 0.035, blue: 0.075)
-    static let panel = Color.white.opacity(0.075)
-    static let panelBorder = Color.white.opacity(0.12)
+    static let panel = Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.92)
+    static let panelBorder = Color.white.opacity(0.14)
     static let pageInset: CGFloat = 16
     static let rowIconSize: CGFloat = 17
     static let rowIconFrame: CGFloat = 28
@@ -136,20 +136,12 @@ struct AppGlassPanel<Content: View>: View {
 
     var body: some View {
         content
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [tint.opacity(0.42), Color.white.opacity(0.07)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .strokeBorder(tint.opacity(0.34), lineWidth: 1)
             }
-            .shadow(color: tint.opacity(0.10), radius: 24, y: 12)
+            .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
     }
 }
 
@@ -172,57 +164,39 @@ struct AppCapsuleBadge: View {
 }
 
 struct AppGradientButtonStyle: ButtonStyle {
-    var colors: [Color] = [AppTheme.accent, AppTheme.hotPink]
+    var colors: [Color] = [AppTheme.secondaryAccent, AppTheme.accent]
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .brightness(configuration.isPressed ? -0.04 : 0)
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.82 : 1)
             .background(
                 LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 17, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
-            .shadow(color: colors.first?.opacity(0.28) ?? .clear, radius: 18, y: 8)
+            .shadow(color: colors.first?.opacity(0.18) ?? .clear, radius: 9, y: 4)
     }
 }
 
 struct AppAuroraBackground: View {
-    @State private var animate = false
-
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 AppTheme.darkCanvas
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.22))
-                    .frame(width: proxy.size.width * 0.92)
-                    .blur(radius: 70)
-                    .offset(x: animate ? proxy.size.width * 0.32 : -proxy.size.width * 0.34,
-                            y: animate ? -proxy.size.height * 0.25 : -proxy.size.height * 0.05)
-                Circle()
-                    .fill(AppTheme.hotPink.opacity(0.15))
-                    .frame(width: proxy.size.width * 0.72)
-                    .blur(radius: 80)
-                    .offset(x: animate ? -proxy.size.width * 0.28 : proxy.size.width * 0.28,
-                            y: animate ? proxy.size.height * 0.26 : proxy.size.height * 0.42)
-                Circle()
-                    .fill(AppTheme.secondaryAccent.opacity(0.10))
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 42)
-                    .position(x: proxy.size.width * 0.84, y: proxy.size.height * 0.58)
+                if UIImage(named: "AppBackgroundNeon") != nil {
+                    Image("AppBackgroundNeon")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                        .opacity(0.58)
+                }
                 LinearGradient(
-                    colors: [.clear, Color.black.opacity(0.36), Color.black.opacity(0.78)],
+                    colors: [Color.black.opacity(0.18), Color.black.opacity(0.52), Color.black.opacity(0.82)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
             .ignoresSafeArea()
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
-                animate = true
-            }
         }
         .allowsHitTesting(false)
     }
