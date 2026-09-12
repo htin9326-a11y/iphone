@@ -146,14 +146,24 @@ struct ContentView: View {
             // the leading icon and trailing Toggle.
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
+                    // Keep the original browser mounted for state/lifecycle,
+                    // but fully cover it while the Function UI is displayed.
                     AppDataBrowserView(tabSession: filesTabSession)
                         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
 
+                    Color.black
+                        .ignoresSafeArea()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .zIndex(1)
+
                     FunctionOverlayView()
                         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                        .background(Color.black)
                         .clipped()
+                        .zIndex(2)
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                .clipped()
             }
         case .patches:
             ZStack {
@@ -623,6 +633,11 @@ private struct FunctionOverlayView: View {
     var body: some View {
         NavigationStack {
             ZStack {
+                // Opaque base layer prevents the File/Data Browser from
+                // showing through below the Function content.
+                Color.black
+                    .ignoresSafeArea()
+
                 AppNeonBackground()
                     .ignoresSafeArea()
 
@@ -655,6 +670,7 @@ private struct FunctionOverlayView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
