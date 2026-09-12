@@ -622,30 +622,42 @@ private struct FunctionOverlayView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppNeonBackground()
-                    .ignoresSafeArea()
+            GeometryReader { proxy in
+                let width = max(proxy.size.width, 1)
+                let leadingInset: CGFloat = width <= 500 ? 20 : 14
+                let trailingInset: CGFloat = 14
+                let contentWidth = max(width - leadingInset - trailingInset, 1)
 
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(spacing: 14) {
-                        functionHeader
-                        gameSelector
-                        functionTargetCard
-                        remoteFunctions
-                        statusCard
-                            .id(refreshToken)
+                ZStack(alignment: .topLeading) {
+                    AppNeonBackground()
+                        .ignoresSafeArea()
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        HStack(spacing: 0) {
+                            Spacer(minLength: leadingInset)
+
+                            VStack(spacing: 10) {
+                                functionHeader
+                                gameSelector
+                                functionTargetCard
+                                remoteFunctions
+                                statusCard
+                                    .id(refreshToken)
+                            }
+                            .frame(width: contentWidth, alignment: .topLeading)
+
+                            Spacer(minLength: trailingInset)
+                        }
+                        .frame(width: width, alignment: .leading)
+                        .padding(.top, 8)
+                        .padding(.bottom, 28)
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 10)
                     }
-                    .frame(maxWidth: 860, alignment: .topLeading)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 10)
-                    .padding(.bottom, 30)
-                    .opacity(contentAppeared ? 1 : 0)
-                    .offset(y: contentAppeared ? 0 : 12)
+                    .frame(width: width, height: proxy.size.height, alignment: .topLeading)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .clipped()
-                .refreshable { await licenseSession.refreshStatus() }
+                .frame(width: width, height: proxy.size.height, alignment: .topLeading)
             }
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
@@ -666,56 +678,80 @@ private struct FunctionOverlayView: View {
                 Task { await licenseSession.refreshStatus() }
             }
             .animation(.easeInOut(duration: 0.22), value: refreshToken)
+            .refreshable { await licenseSession.refreshStatus() }
         }
     }
 
     private var gameSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(availableGames) { game in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            selectedGameKey = game.gameKey
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            GameIconView(gameKey: game.gameKey, remoteURL: resolvedIconURL(for: game), size: 42, cornerRadius: 12)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(game.title)
-                                    .font(.caption.weight(.bold))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                Text(game.bundleID)
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
+        GeometryReader { proxy in
+            let availableWidth = max(proxy.size.width, 1)
+            let cardWidth = max(148, min(205, (availableWidth - 10) / 2))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(availableGames) { game in
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                selectedGameKey = game.gameKey
                             }
-                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            Spacer(minLength: 6)
+                        } label: {
+                            HStack(spacing: 8) {
+                                GameIconView(
+                                    gameKey: game.gameKey,
+                                    remoteURL: resolvedIconURL(for: game),
+                                    size: 38,
+                                    cornerRadius: 11
+                                )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(game.title)
+                                        .font(.system(size: 12.5, weight: .bold))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+
+                                    Text(game.bundleID)
+                                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 8)
+                            .frame(width: cardWidth, height: 66, alignment: .leading)
+                            .background(
+                                selectedGameKey == game.gameKey
+                                    ? Color.orange.opacity(0.18)
+                                    : Color.white.opacity(0.05),
+                                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .strokeBorder(
+                                        selectedGameKey == game.gameKey
+                                            ? Color.orange.opacity(0.42)
+                                            : Color.white.opacity(0.07),
+                                        lineWidth: 1
+                                    )
+                            }
                         }
-                        .padding(10)
-                        .frame(width: 200, alignment: .leading)
-                        .background((selectedGameKey == game.gameKey ? Color.orange.opacity(0.18) : Color.white.opacity(0.05)), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(selectedGameKey == game.gameKey ? Color.orange.opacity(0.42) : Color.white.opacity(0.05), lineWidth: 1)
-                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 1)
             }
-            .padding(.horizontal, 1)
+            .frame(width: availableWidth, height: 68, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 68)
         .clipped()
     }
 
     private var remoteFunctions: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 7) {
             if visibleSwitches.isEmpty {
-                VStack(spacing: 10) {
-                    GameIconView(gameKey: currentGame.gameKey, remoteURL: resolvedIconURL(for: currentGame), size: 62, cornerRadius: 18)
+                VStack(spacing: 8) {
+                    GameIconView(gameKey: currentGame.gameKey, remoteURL: resolvedIconURL(for: currentGame), size: 56, cornerRadius: 16)
                     Text("Chưa có chức năng cho \(currentGame.title)")
                         .font(.headline.weight(.bold))
                     Text("Admin có thể thêm switch riêng, gắn package .3105 và đồng bộ trực tiếp cho game này.")
@@ -723,12 +759,12 @@ private struct FunctionOverlayView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
-                .padding(18)
+                .padding(16)
                 .frame(maxWidth: .infinity)
-                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
                 }
             } else {
                 ForEach(visibleSwitches) { item in
@@ -746,12 +782,14 @@ private struct FunctionOverlayView: View {
                     Text("Chức năng từ Admin tạm thời chưa đồng bộ")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
                 }
-                .padding(12)
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(10)
+                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var functionHeader: some View {
@@ -759,7 +797,7 @@ private struct FunctionOverlayView: View {
             if let data = functionBannerData {
                 AnimatedGIFView(data: data)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 168)
+                    .frame(height: 142)
             } else {
                 LinearGradient(
                     colors: [Color(red: 0.02, green: 0.12, blue: 0.18), Color.black],
@@ -769,56 +807,62 @@ private struct FunctionOverlayView: View {
             }
 
             LinearGradient(
-                colors: [Color.black.opacity(0.04), Color.black.opacity(0.76)],
+                colors: [Color.black.opacity(0.02), Color.black.opacity(0.80)],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 8) {
                     Text("FUNCTION CENTER")
-                        .font(.system(size: 11, weight: .black, design: .rounded))
-                        .tracking(1.5)
+                        .font(.system(size: 9.5, weight: .black, design: .rounded))
+                        .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.84))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
-                    Spacer()
+                    Spacer(minLength: 0)
 
-                    HStack(spacing: 5) {
+                    HStack(spacing: 4) {
                         Circle()
                             .fill(Color.green)
-                            .frame(width: 7, height: 7)
+                            .frame(width: 6, height: 6)
                         Text("LIVE")
-                            .font(.caption2.weight(.black))
-                            .tracking(0.8)
+                            .font(.system(size: 9, weight: .black, design: .rounded))
                     }
                     .foregroundStyle(Color.green)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
                     .background(Color.green.opacity(0.15), in: Capsule())
                     .overlay {
                         Capsule().strokeBorder(Color.cyan.opacity(0.60), lineWidth: 1)
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
                 Text("GAME TOOLS")
-                    .font(.system(size: 23, weight: .black, design: .rounded))
+                    .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
                 Text("Chọn game và bật chức năng bạn cần")
-                    .font(.caption.weight(.medium))
+                    .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .padding(16)
+            .padding(13)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 168)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .frame(height: 142)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.cyan.opacity(0.42), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.cyan.opacity(0.38), lineWidth: 1)
         }
-        .shadow(color: Color.cyan.opacity(0.12), radius: 12, y: 6)
+        .shadow(color: Color.cyan.opacity(0.10), radius: 10, y: 5)
     }
 
     private var functionBannerData: Data? {
@@ -829,62 +873,76 @@ private struct FunctionOverlayView: View {
     }
 
     private var functionTargetCard: some View {
-        HStack(spacing: 12) {
-            GameIconView(gameKey: currentGame.gameKey, remoteURL: resolvedIconURL(for: currentGame), size: 42, cornerRadius: 12)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 9) {
+            GameIconView(
+                gameKey: currentGame.gameKey,
+                remoteURL: resolvedIconURL(for: currentGame),
+                size: 38,
+                cornerRadius: 10
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(currentGame.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
                 Text(currentGame.bundleID)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-            Spacer()
+
             Text(licenseSession.license?.status.uppercased() ?? "SYNC")
-                .font(.caption2.weight(.bold))
+                .font(.system(size: 9.5, weight: .bold, design: .rounded))
                 .foregroundStyle(.red)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.red.opacity(0.1), in: Capsule())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.red.opacity(0.10), in: Capsule())
+                .lineLimit(1)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.red.opacity(0.16), lineWidth: 1)
         }
     }
 
     private var statusCard: some View {
         let activeCount = visibleSwitches.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .center, spacing: 8) {
             Image(systemName: activeCount > 0 ? "checkmark.seal.fill" : "circle.dashed")
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
+                .font(.system(size: 15, weight: .semibold))
+
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trạng thái")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
                     .lineLimit(1)
                 Text("\(currentGame.title): đang bật \(activeCount)/\(max(visibleSwitches.count, 1)) chức năng")
-                    .font(.caption)
+                    .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-            Spacer()
+
             Text(activeCount > 0 ? "ACTIVE" : "READY")
-                .font(.caption2.weight(.bold))
+                .font(.system(size: 9.5, weight: .bold, design: .rounded))
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
-                .padding(.horizontal, 9)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background((activeCount > 0 ? Color.green : Color.secondary).opacity(0.10), in: Capsule())
         }
-        .padding(14)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -909,30 +967,31 @@ private struct RemoteFunctionSwitchCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 11) {
+        HStack(alignment: .center, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isOn ? Color.red.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
                 if isBusy {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: item.icon.isEmpty ? "bolt.fill" : item.icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(isOn ? Color.red : Color.secondary)
                 }
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 34, height: 34)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(operationMessage ?? displaySubtitle)
-                    .font(.caption)
+                    .font(.system(size: 10.5))
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
                     .lineLimit(2)
                     .truncationMode(.tail)
+                    .minimumScaleFactor(0.8)
             }
             .layoutPriority(1)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -951,16 +1010,16 @@ private struct RemoteFunctionSwitchCard: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .tint(isOn ? Color.red : AppTheme.accent)
-            .frame(width: 52, alignment: .trailing)
+            .frame(width: 46, alignment: .trailing)
             .fixedSize(horizontal: true, vertical: false)
             .disabled(!item.enabled || isBusy)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(isOn ? Color.red.opacity(0.42) : Color.white.opacity(0.10), lineWidth: 1)
         }
         .opacity(item.enabled ? 1 : 0.65)
