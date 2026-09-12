@@ -19,6 +19,8 @@ enum AppTheme {
     static let panel = Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.92)
     static let panelBorder = Color.white.opacity(0.14)
     static let pageInset: CGFloat = 16
+    static let contentMaxWidth: CGFloat = 860
+    static let compactPageInset: CGFloat = 14
     static let rowIconSize: CGFloat = 17
     static let rowIconFrame: CGFloat = 28
     static let fileRowIconSize: CGFloat = 17
@@ -86,6 +88,7 @@ struct AppSearchField: View {
         )
         .padding(.horizontal, AppTheme.pageInset)
         .padding(.vertical, 8)
+        .frame(maxWidth: AppTheme.contentMaxWidth)
         .background(.bar)
     }
 }

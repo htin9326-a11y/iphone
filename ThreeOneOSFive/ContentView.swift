@@ -51,12 +51,13 @@ struct ContentView: View {
     }
 
     private var compactLayout: some View {
+        // The compact navigation rail is a floating control, not a layout
+        // column.  The previous implementation added a permanent 52pt leading
+        // inset to every screen, which shifted NavigationStack titles and made
+        // cards appear clipped / squeezed on narrow iPhones.
         ZStack(alignment: .leading) {
             sectionContent(selectedVisibleSection)
                 .id(selectedVisibleSection.rawValue)
-                // Reserve room for the compact navigation rail so it never
-                // covers the first letters, icons, or controls.
-                .padding(.leading, 52)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             AppSideNavigation(
@@ -72,6 +73,7 @@ struct ContentView: View {
             .frame(maxHeight: .infinity, alignment: .center)
             .zIndex(20)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.18), value: selectedVisibleSection.rawValue)
         .animation(.easeInOut(duration: 0.18), value: sideMenuExpanded)
     }
@@ -298,7 +300,8 @@ private struct DashboardView: View {
                         gameGridSection
                         deviceMiniSection
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: 860, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 28)
                     .opacity(contentAppeared ? 1 : 0)
@@ -474,27 +477,30 @@ private struct HomeGameCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            GameIconView(gameKey: game.gameKey, remoteURL: iconURL, size: 56, cornerRadius: 15)
+            GameIconView(gameKey: game.gameKey, remoteURL: iconURL, size: 50, cornerRadius: 14)
             VStack(alignment: .leading, spacing: 4) {
                 Text(game.title)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .allowsTightening(true)
                 Text(game.bundleID)
-                    .font(.caption.monospaced())
+                    .font(.caption2.monospaced())
                     .foregroundStyle(.white.opacity(0.58))
                     .lineLimit(2)
+                    .truncationMode(.middle)
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
                     Text("Mở nhanh")
+                        .lineLimit(1)
                 }
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(isSelected ? Color.orange : Color.white.opacity(0.72))
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 8)
         }
-        .padding(12)
+        .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
@@ -620,7 +626,8 @@ private struct FunctionOverlayView: View {
                         statusCard
                             .id(refreshToken)
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: 860, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
@@ -1257,7 +1264,8 @@ private struct KeyInfoOverlayView: View {
                         deviceDetails
                         adminCard
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: 860, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
