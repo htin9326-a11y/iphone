@@ -39,6 +39,12 @@ struct ContentView: View {
         }
         .tint(AppTheme.accent)
         .imageScale(.small)
+        .overlay {
+            SnowParticlesOverlay()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .zIndex(999)
+        }
         .onChange(of: patchDraftCoordinator.request?.id) { requestID in
             if requestID != nil { tabNavigation.select(AppSection.files.rawValue) }
         }
@@ -805,9 +811,7 @@ private struct FunctionOverlayView: View {
         ZStack(alignment: .topLeading) {
             if let data = functionBannerData {
                 AnimatedGIFView(data: data)
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 142)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .clipped()
             } else {
                 LinearGradient(
@@ -818,7 +822,7 @@ private struct FunctionOverlayView: View {
             }
 
             LinearGradient(
-                colors: [Color.black.opacity(0.02), Color.black.opacity(0.80)],
+                colors: [Color.black.opacity(0.00), Color.black.opacity(0.24), Color.black.opacity(0.82)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -828,9 +832,9 @@ private struct FunctionOverlayView: View {
                     Text("FUNCTION CENTER")
                         .font(.system(size: 9.5, weight: .black, design: .rounded))
                         .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.84))
+                        .foregroundStyle(.white.opacity(0.86))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.70)
 
                     Spacer(minLength: 0)
 
@@ -852,22 +856,25 @@ private struct FunctionOverlayView: View {
 
                 Spacer(minLength: 0)
 
-                Text("GAME TOOLS")
-                    .font(.system(size: 20, weight: .black, design: .rounded))
+                Text("Aujunpeak VN")
+                    .font(.system(size: 21, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.76)
 
                 Text("Chọn game và bật chức năng bạn cần")
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(.white.opacity(0.76))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.76)
             }
-            .padding(13)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .frame(height: 142)
+        .frame(maxWidth: .infinity)
+        .frame(height: 142, alignment: .center)
+        .background(Color.black.opacity(0.75))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1775,6 +1782,76 @@ private struct GameIconView: View {
         case "lienquan": return "GameIconLienQuan"
         default: return nil
         }
+    }
+}
+
+
+private struct SnowParticlesOverlay: View {
+    private struct Flake {
+        let seed: Double
+        let size: CGFloat
+        let speed: Double
+        let sway: CGFloat
+        let opacity: Double
+        let drift: Double
+    }
+
+    private static let flakes: [Flake] = (0..<78).map { index in
+        let i = Double(index)
+        let seed = (i * 0.61803398875).truncatingRemainder(dividingBy: 1.0)
+        let size = CGFloat(1.5 + ((i * 1.37).truncatingRemainder(dividingBy: 4.5)))
+        let speed = 0.055 + ((i * 0.017).truncatingRemainder(dividingBy: 0.075))
+        let sway = CGFloat(5 + ((i * 1.9).truncatingRemainder(dividingBy: 18)))
+        let opacity = 0.18 + ((i * 0.071).truncatingRemainder(dividingBy: 0.52))
+        let drift = 0.6 + ((i * 0.11).truncatingRemainder(dividingBy: 1.8))
+        return Flake(seed: seed, size: size, speed: speed, sway: sway, opacity: opacity, drift: drift)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
+                Canvas { context, size in
+                    let width = max(size.width, 1)
+                    let height = max(size.height, 1)
+                    let time = timeline.date.timeIntervalSince1970
+
+                    for flake in Self.flakes {
+                        let cycle = (time * flake.speed + flake.seed).truncatingRemainder(dividingBy: 1.0)
+                        let baseY = cycle * (height + 60) - 30
+                        let wave = sin((time * flake.drift) + flake.seed * 12.0)
+                        let xRatio = (flake.seed + wave * 0.018).truncatingRemainder(dividingBy: 1.0)
+                        let x = ((xRatio < 0 ? xRatio + 1 : xRatio) * width)
+                        let y = baseY
+                        let rect = CGRect(
+                            x: x,
+                            y: y,
+                            width: flake.size,
+                            height: flake.size
+                        )
+
+                        context.opacity = flake.opacity
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(.white)
+                        )
+
+                        if flake.size >= 4.0 {
+                            let arm = flake.size * 1.25
+                            let center = CGPoint(x: x + flake.size / 2, y: y + flake.size / 2)
+                            var sparkle = Path()
+                            sparkle.move(to: CGPoint(x: center.x - arm, y: center.y))
+                            sparkle.addLine(to: CGPoint(x: center.x + arm, y: center.y))
+                            sparkle.move(to: CGPoint(x: center.x, y: center.y - arm))
+                            sparkle.addLine(to: CGPoint(x: center.x, y: center.y + arm))
+                            context.stroke(sparkle, with: .color(.white.opacity(0.45)), lineWidth: 0.6)
+                        }
+                    }
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
