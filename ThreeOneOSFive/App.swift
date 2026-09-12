@@ -789,19 +789,22 @@ private struct LicenseActivationView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "iphone.gen3")
                                 Text("Device ID  •  \(licenseSession.deviceID.prefix(18))…")
+                                    .lineLimit(2)
+                                    .truncationMode(.middle)
                             }
                             .font(.caption.monospaced())
                             .foregroundStyle(.white.opacity(0.45))
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                             if let error = licenseSession.lastError, !error.isEmpty {
-                                HStack(spacing: 10) {
+                                HStack(alignment: .top, spacing: 10) {
                                     Image(systemName: "xmark.octagon.fill")
                                         .foregroundStyle(.red)
                                     Text(error)
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.55))
-                                    Spacer()
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(12)
                                 .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -855,6 +858,7 @@ private struct LicenseActivationView: View {
                         }
                         .offset(x: shake ? -7 : 0)
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 22)
                     .padding(.top, 28)
                     .padding(.bottom, 24)

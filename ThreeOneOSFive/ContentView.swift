@@ -54,6 +54,10 @@ struct ContentView: View {
         ZStack(alignment: .leading) {
             sectionContent(selectedVisibleSection)
                 .id(selectedVisibleSection.rawValue)
+                // Reserve room for the compact navigation rail so it never
+                // covers the first letters, icons, or controls.
+                .padding(.leading, 52)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             AppSideNavigation(
                 sections: featureVisibility.visibleSections,
@@ -135,13 +139,19 @@ struct ContentView: View {
         case .files:
             ZStack {
                 AppDataBrowserView(tabSession: filesTabSession)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 FunctionOverlayView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .patches:
             ZStack {
                 PatchProjectsView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 KeyInfoOverlayView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .cleaner:
             CleanerView()
         case .wallpapers:
@@ -288,6 +298,7 @@ private struct DashboardView: View {
                         gameGridSection
                         deviceMiniSection
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 28)
                     .opacity(contentAppeared ? 1 : 0)
@@ -480,6 +491,7 @@ private struct HomeGameCard: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(isSelected ? Color.orange : Color.white.opacity(0.72))
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
         }
         .padding(12)
@@ -519,10 +531,13 @@ private struct HomeAdminOverlayCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("GAME CENTER")
                     .font(.system(size: 15, weight: .black, design: .rounded))
+                    .lineLimit(1)
                 Text("Hà Văn Huấn • Aujunpeak VN")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 8)
 
@@ -605,6 +620,7 @@ private struct FunctionOverlayView: View {
                         statusCard
                             .id(refreshToken)
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
@@ -650,11 +666,14 @@ private struct FunctionOverlayView: View {
                                 Text(game.title)
                                     .font(.caption.weight(.bold))
                                     .lineLimit(1)
+                                    .truncationMode(.tail)
                                 Text(game.bundleID)
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
+                                    .truncationMode(.middle)
                             }
+                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                             Spacer(minLength: 6)
                         }
                         .padding(10)
@@ -670,6 +689,7 @@ private struct FunctionOverlayView: View {
             }
             .padding(.horizontal, 1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var remoteFunctions: some View {
@@ -772,6 +792,7 @@ private struct FunctionOverlayView: View {
             }
             .padding(16)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 168)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
@@ -794,10 +815,14 @@ private struct FunctionOverlayView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(currentGame.title)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
                 Text(currentGame.bundleID)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer()
             Text(licenseSession.license?.status.uppercased() ?? "SYNC")
                 .font(.caption2.weight(.bold))
@@ -807,6 +832,7 @@ private struct FunctionOverlayView: View {
                 .background(Color.red.opacity(0.1), in: Capsule())
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -816,16 +842,19 @@ private struct FunctionOverlayView: View {
 
     private var statusCard: some View {
         let activeCount = visibleSwitches.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
-        return HStack(spacing: 10) {
+        return HStack(alignment: .top, spacing: 10) {
             Image(systemName: activeCount > 0 ? "checkmark.seal.fill" : "circle.dashed")
                 .foregroundStyle(activeCount > 0 ? Color.green : Color.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trạng thái")
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
                 Text("\(currentGame.title): đang bật \(activeCount)/\(max(visibleSwitches.count, 1)) chức năng")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer()
             Text(activeCount > 0 ? "ACTIVE" : "READY")
                 .font(.caption2.weight(.bold))
@@ -835,6 +864,7 @@ private struct FunctionOverlayView: View {
                 .background((activeCount > 0 ? Color.green : Color.secondary).opacity(0.10), in: Capsule())
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
@@ -860,7 +890,7 @@ private struct RemoteFunctionSwitchCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 13) {
+        HStack(alignment: .top, spacing: 13) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(isOn ? Color.red.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
@@ -877,14 +907,15 @@ private struct RemoteFunctionSwitchCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(operationMessage ?? displaySubtitle)
                     .font(.caption)
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
-                    .lineLimit(3)
-
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 8)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
             Toggle("", isOn: Binding(
                 get: { isOn },
@@ -902,6 +933,7 @@ private struct RemoteFunctionSwitchCard: View {
             .disabled(!item.enabled || isBusy)
         }
         .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1225,6 +1257,7 @@ private struct KeyInfoOverlayView: View {
                         deviceDetails
                         adminCard
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 30)
@@ -1274,6 +1307,7 @@ private struct KeyInfoOverlayView: View {
                             Text("AUJUNPEAK VN")
                                 .font(.system(size: 18, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
                             Text("LICENSE CENTER")
                                 .font(.caption2.weight(.bold))
                                 .tracking(1.4)
@@ -1292,16 +1326,22 @@ private struct KeyInfoOverlayView: View {
                             Text("KEY INFORMATION")
                                 .font(.system(size: 20, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.76)
                             Text("Thông tin kích hoạt và thiết bị")
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.68))
+                                .lineLimit(2)
                         }
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
                         Spacer(minLength: 8)
 
                         Text(licenseStatusText)
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(licenseStatusColor)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(licenseStatusColor.opacity(0.16), in: Capsule())
@@ -1518,6 +1558,7 @@ private struct InfoCard<Content: View>: View {
                     .foregroundStyle(.white.opacity(0.72))
             }
             content
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(15)
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -1541,16 +1582,20 @@ private struct InfoLine: View {
     var monospaced = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: 10)
             Text(value)
                 .font(monospaced ? .caption.monospaced() : .subheadline.weight(.semibold))
                 .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .minimumScaleFactor(0.72)
+                .lineLimit(3)
+                .minimumScaleFactor(0.62)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
         }
     }
 }
