@@ -13,6 +13,8 @@ struct ThreeOneOSFiveApp: App {
     @AppStorage("aujunpeak.appearance") private var appearanceMode = "system"
     @State private var showOnboarding = false
     @State private var showAttribution = false
+    @State private var showLicenseCheck = false
+    @State private var licenseCheckSucceeded = false
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -61,6 +63,15 @@ struct ThreeOneOSFiveApp: App {
                     .zIndex(100)
                 }
 
+                if showLicenseCheck {
+                    LicenseCheckOverlay(
+                        succeeded: licenseCheckSucceeded,
+                        hasStoredKey: !licenseSession.storedKey.isEmpty
+                    )
+                    .transition(.opacity)
+                    .zIndex(120)
+                }
+
                 if showOnboarding {
                     OnboardingView {
                         OnboardingStore.markCompleted()
@@ -106,7 +117,7 @@ struct ThreeOneOSFiveApp: App {
                 if !showOnboarding {
                     appState.detectSupport()
                     checkForUpdate()
-                    Task { await licenseSession.bootstrap() }
+                    runLicenseCheck()
                 }
             }
             .onChange(of: scenePhase) { phase in
@@ -116,6 +127,25 @@ struct ThreeOneOSFiveApp: App {
             }
             .onOpenURL { url in
                 patchDraftCoordinator.presentImport(url)
+            }
+        }
+    }
+
+    private func runLicenseCheck() {
+        guard !showLicenseCheck else { return }
+        showLicenseCheck = true
+        licenseCheckSucceeded = false
+        Task {
+            await licenseSession.bootstrap()
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            await MainActor.run {
+                licenseCheckSucceeded = !licenseSession.storedKey.isEmpty && licenseSession.license != nil
+            }
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    showLicenseCheck = false
+                }
             }
         }
     }
@@ -645,6 +675,58 @@ private struct LicenseFailureOverlay: View {
         .task {
             try? await Task.sleep(nanoseconds: 2_200_000_000)
             onFinished()
+        }
+    }
+}
+
+private struct LicenseCheckOverlay: View {
+    let succeeded: Bool
+    let hasStoredKey: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.90)
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill((succeeded ? AppTheme.secondaryAccent : AppTheme.accent).opacity(0.14))
+                        .frame(width: 92, height: 92)
+
+                    if succeeded {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 34, weight: .black))
+                            .foregroundStyle(AppTheme.secondaryAccent)
+                    } else {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(AppTheme.secondaryAccent)
+                    }
+                }
+
+                Text(succeeded ? "KEY ĐÃ XÁC THỰC" : "ĐANG KIỂM TRA KEY")
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(
+                    succeeded
+                    ? "Thiết bị đã sẵn sàng sử dụng"
+                    : (hasStoredKey ? "Đang đồng bộ trạng thái thiết bị…" : "Đang chuẩn bị hệ thống…")
+                )
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.62))
+            }
+            .padding(28)
+            .frame(maxWidth: 290)
+            .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(
+                        (succeeded ? AppTheme.secondaryAccent : AppTheme.accent).opacity(0.34),
+                        lineWidth: 1
+                    )
+            }
         }
     }
 }

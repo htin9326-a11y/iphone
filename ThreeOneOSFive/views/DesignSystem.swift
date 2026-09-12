@@ -1,4 +1,7 @@
+import Foundation
 import SwiftUI
+import UIKit
+import ImageIO
 
 enum AppTheme {
     static let accent = Color(
@@ -117,6 +120,59 @@ struct AppLogo: View {
     }
 }
 
+struct AnimatedGIFView: UIViewRepresentable {
+    let data: Data
+
+    func makeUIView(context: Context) -> UIImageView {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
+        configure(view)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIImageView, context: Context) {
+        if !uiView.isAnimating {
+            configure(uiView)
+        }
+    }
+
+    private func configure(_ view: UIImageView) {
+        let result = Self.frames(from: data)
+        view.animationImages = result.images
+        view.animationDuration = result.duration
+        view.animationRepeatCount = 0
+        view.startAnimating()
+    }
+
+    private static func frames(from data: Data) -> (images: [UIImage], duration: TimeInterval) {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return ([], 0)
+        }
+
+        let count = CGImageSourceGetCount(source)
+        var images: [UIImage] = []
+        var duration: TimeInterval = 0
+
+        for index in 0..<count {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+
+            var delay: TimeInterval = 0.08
+            if let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
+               let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
+                let unclamped = gif[kCGImagePropertyGIFUnclampedDelayTime as String] as? Double
+                let clamped = gif[kCGImagePropertyGIFDelayTime as String] as? Double
+                delay = max(unclamped ?? clamped ?? 0.08, 0.04)
+            }
+
+            images.append(UIImage(cgImage: cgImage))
+            duration += delay
+        }
+
+        return (images, max(duration, 0.8))
+    }
+}
+
 /// Shared surface used by the redesigned screens. Keeping the treatment here
 /// means every tab feels like part of one app without touching any feature code.
 struct AppGlassPanel<Content: View>: View {
@@ -177,21 +233,27 @@ struct AppGradientButtonStyle: ButtonStyle {
     }
 }
 
-struct AppAuroraBackground: View {
+struct AppAnimatedBackground: View {
+    var opacity: Double = 0.48
+
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 AppTheme.darkCanvas
-                if UIImage(named: "AppBackgroundNeon") != nil {
+                if let data = backgroundData {
+                    AnimatedGIFView(data: data)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .opacity(opacity)
+                } else if UIImage(named: "AppBackgroundNeon") != nil {
                     Image("AppBackgroundNeon")
                         .resizable()
                         .scaledToFill()
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .clipped()
-                        .opacity(0.58)
+                        .opacity(opacity)
                 }
                 LinearGradient(
-                    colors: [Color.black.opacity(0.18), Color.black.opacity(0.52), Color.black.opacity(0.82)],
+                    colors: [Color.black.opacity(0.18), Color.black.opacity(0.50), Color.black.opacity(0.86)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -199,5 +261,18 @@ struct AppAuroraBackground: View {
             .ignoresSafeArea()
         }
         .allowsHitTesting(false)
+    }
+
+    private var backgroundData: Data? {
+        guard let url = Bundle.main.url(forResource: "AppBackground", withExtension: "gif") else {
+            return nil
+        }
+        return try? Data(contentsOf: url)
+    }
+}
+
+struct AppAuroraBackground: View {
+    var body: some View {
+        AppAnimatedBackground(opacity: 0.52)
     }
 }
