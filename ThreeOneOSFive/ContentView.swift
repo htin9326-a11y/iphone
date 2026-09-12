@@ -622,42 +622,29 @@ private struct FunctionOverlayView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { proxy in
-                let width = max(proxy.size.width, 1)
-                let leadingInset: CGFloat = width <= 500 ? 20 : 14
-                let trailingInset: CGFloat = 14
-                let contentWidth = max(width - leadingInset - trailingInset, 1)
+            ZStack(alignment: .topLeading) {
+                AppNeonBackground()
+                    .ignoresSafeArea()
 
-                ZStack(alignment: .topLeading) {
-                    AppNeonBackground()
-                        .ignoresSafeArea()
-
-                    ScrollView(.vertical, showsIndicators: true) {
-                        HStack(spacing: 0) {
-                            Spacer(minLength: leadingInset)
-
-                            VStack(spacing: 10) {
-                                functionHeader
-                                gameSelector
-                                functionTargetCard
-                                remoteFunctions
-                                statusCard
-                                    .id(refreshToken)
-                            }
-                            .frame(width: contentWidth, alignment: .topLeading)
-
-                            Spacer(minLength: trailingInset)
-                        }
-                        .frame(width: width, alignment: .leading)
-                        .padding(.top, 8)
-                        .padding(.bottom, 28)
-                        .opacity(contentAppeared ? 1 : 0)
-                        .offset(y: contentAppeared ? 0 : 10)
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        functionHeader
+                        gameSelector
+                        functionTargetCard
+                        remoteFunctions
+                        statusCard
+                            .id(refreshToken)
                     }
-                    .frame(width: width, height: proxy.size.height, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 10)
                 }
-                .frame(width: width, height: proxy.size.height, alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -684,7 +671,8 @@ private struct FunctionOverlayView: View {
     private var gameSelector: some View {
         GeometryReader { proxy in
             let availableWidth = max(proxy.size.width, 1)
-            let cardWidth = max(148, min(205, (availableWidth - 10) / 2))
+            let compactCardWidth = max(156, min(205, (availableWidth - 10) / 2))
+            let cardWidth = availableGames.count <= 1 ? availableWidth : compactCardWidth
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -738,12 +726,13 @@ private struct FunctionOverlayView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 1)
+                .frame(minWidth: availableWidth, alignment: .leading)
             }
             .frame(width: availableWidth, height: 68, alignment: .leading)
+            .clipped()
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 68)
-        .clipped()
     }
 
     private var remoteFunctions: some View {
@@ -771,6 +760,7 @@ private struct FunctionOverlayView: View {
                         item: item,
                         onChange: { refreshToken &+= 1 }
                     )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
@@ -795,8 +785,10 @@ private struct FunctionOverlayView: View {
         ZStack(alignment: .topLeading) {
             if let data = functionBannerData {
                 AnimatedGIFView(data: data)
+                    .scaledToFill()
                     .frame(maxWidth: .infinity)
                     .frame(height: 142)
+                    .clipped()
             } else {
                 LinearGradient(
                     colors: [Color(red: 0.02, green: 0.12, blue: 0.18), Color.black],
@@ -905,6 +897,7 @@ private struct FunctionOverlayView: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .clipped()
         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
