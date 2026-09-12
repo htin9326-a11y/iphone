@@ -622,29 +622,39 @@ private struct FunctionOverlayView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 AppNeonBackground()
                     .ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        functionHeader
-                        gameSelector
-                        functionTargetCard
-                        remoteFunctions
-                        statusCard
-                            .id(refreshToken)
+                GeometryReader { proxy in
+                    let viewportWidth = max(proxy.size.width, 1)
+                    let horizontalInset: CGFloat = viewportWidth < 430 ? 12 : 18
+                    let maxContentWidth: CGFloat = 620
+                    let contentWidth = min(max(viewportWidth - (horizontalInset * 2), 0), maxContentWidth)
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(alignment: .center, spacing: 10) {
+                            VStack(alignment: .center, spacing: 10) {
+                                functionHeader
+                                gameSelector
+                                functionTargetCard
+                                remoteFunctions
+                                statusCard
+                                    .id(refreshToken)
+                            }
+                            .frame(width: contentWidth)
+                            .clipped()
+                        }
+                        .frame(width: viewportWidth, alignment: .center)
+                        .padding(.bottom, 28)
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 10)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 8)
-                    .padding(.bottom, 28)
-                    .opacity(contentAppeared ? 1 : 0)
-                    .offset(y: contentAppeared ? 0 : 10)
+                    .frame(width: viewportWidth, height: proxy.size.height, alignment: .top)
+                    .scrollIndicators(.visible)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Function")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -669,70 +679,64 @@ private struct FunctionOverlayView: View {
     }
 
     private var gameSelector: some View {
-        GeometryReader { proxy in
-            let availableWidth = max(proxy.size.width, 1)
-            let compactCardWidth = max(156, min(205, (availableWidth - 10) / 2))
-            let cardWidth = availableGames.count <= 1 ? availableWidth : compactCardWidth
+        let columns = [
+            GridItem(.flexible(minimum: 0), spacing: 10),
+            GridItem(.flexible(minimum: 0), spacing: 10)
+        ]
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(availableGames) { game in
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                selectedGameKey = game.gameKey
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                GameIconView(
-                                    gameKey: game.gameKey,
-                                    remoteURL: resolvedIconURL(for: game),
-                                    size: 38,
-                                    cornerRadius: 11
-                                )
+        return LazyVGrid(columns: columns, alignment: .center, spacing: 8) {
+            ForEach(availableGames) { game in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        selectedGameKey = game.gameKey
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        GameIconView(
+                            gameKey: game.gameKey,
+                            remoteURL: resolvedIconURL(for: game),
+                            size: 38,
+                            cornerRadius: 11
+                        )
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(game.title)
-                                        .font(.system(size: 12.5, weight: .bold))
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(game.title)
+                                .font(.system(size: 12.5, weight: .bold))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
-                                    Text(game.bundleID)
-                                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 8)
-                            .frame(width: cardWidth, height: 66, alignment: .leading)
-                            .background(
-                                selectedGameKey == game.gameKey
-                                    ? Color.orange.opacity(0.18)
-                                    : Color.white.opacity(0.05),
-                                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                    .strokeBorder(
-                                        selectedGameKey == game.gameKey
-                                            ? Color.orange.opacity(0.42)
-                                            : Color.white.opacity(0.07),
-                                        lineWidth: 1
-                                    )
-                            }
+                            Text(game.bundleID)
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
-                        .buttonStyle(.plain)
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
+                    .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(
+                        selectedGameKey == game.gameKey
+                            ? Color.orange.opacity(0.18)
+                            : Color.white.opacity(0.05),
+                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .strokeBorder(
+                                selectedGameKey == game.gameKey
+                                    ? Color.orange.opacity(0.42)
+                                    : Color.white.opacity(0.07),
+                                lineWidth: 1
+                            )
                     }
                 }
-                .frame(minWidth: availableWidth, alignment: .leading)
+                .buttonStyle(.plain)
             }
-            .frame(width: availableWidth, height: 68, alignment: .leading)
-            .clipped()
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 68)
     }
 
     private var remoteFunctions: some View {
@@ -846,7 +850,7 @@ private struct FunctionOverlayView: View {
             }
             .padding(13)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
         .frame(height: 142)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
@@ -1008,7 +1012,7 @@ private struct RemoteFunctionSwitchCard: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 56, maxHeight: 64, alignment: .leading)
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
