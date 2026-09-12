@@ -655,7 +655,6 @@ private struct FunctionOverlayView: View {
                         .offset(y: contentAppeared ? 0 : 10)
                     }
                     .frame(width: width, height: proxy.size.height, alignment: .topLeading)
-                    .scrollBounceBehavior(.basedOnSize)
                 }
                 .frame(width: width, height: proxy.size.height, alignment: .topLeading)
             }
