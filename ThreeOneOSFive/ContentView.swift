@@ -139,13 +139,22 @@ struct ContentView: View {
                 }
             )
         case .files:
-            ZStack {
-                AppDataBrowserView(tabSession: filesTabSession)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                FunctionOverlayView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Keep the Function overlay strictly inside the actual compact
+            // viewport.  A wide intrinsic child (such as the file browser)
+            // must never be allowed to make the ZStack wider than the iPhone,
+            // otherwise the Function rows are centered and clipped on both
+            // the leading icon and trailing Toggle.
+            GeometryReader { proxy in
+                ZStack(alignment: .topLeading) {
+                    AppDataBrowserView(tabSession: filesTabSession)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+
+                    FunctionOverlayView()
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                        .clipped()
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .patches:
             ZStack {
                 PatchProjectsView()
@@ -617,8 +626,8 @@ private struct FunctionOverlayView: View {
                 AppNeonBackground()
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 16) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 14) {
                         functionHeader
                         gameSelector
                         functionTargetCard
@@ -627,13 +636,15 @@ private struct FunctionOverlayView: View {
                             .id(refreshToken)
                     }
                     .frame(maxWidth: 860, alignment: .topLeading)
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 10)
                     .padding(.bottom, 30)
                     .opacity(contentAppeared ? 1 : 0)
                     .offset(y: contentAppeared ? 0 : 12)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
                 .refreshable { await licenseSession.refreshStatus() }
             }
             .navigationTitle("Function")
@@ -697,6 +708,7 @@ private struct FunctionOverlayView: View {
             .padding(.horizontal, 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     private var remoteFunctions: some View {
@@ -897,31 +909,32 @@ private struct RemoteFunctionSwitchCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: .center, spacing: 11) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(isOn ? Color.red.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
                 if isBusy {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: item.icon.isEmpty ? "bolt.fill" : item.icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(isOn ? Color.red : Color.secondary)
                 }
             }
-            .frame(width: 42, height: 42)
+            .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(operationMessage ?? displaySubtitle)
                     .font(.caption)
                     .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
             }
+            .layoutPriority(1)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
             Toggle("", isOn: Binding(
@@ -936,11 +949,15 @@ private struct RemoteFunctionSwitchCard: View {
                 }
             ))
             .labelsHidden()
+            .toggleStyle(.switch)
             .tint(isOn ? Color.red : AppTheme.accent)
+            .frame(width: 52, alignment: .trailing)
+            .fixedSize(horizontal: true, vertical: false)
             .disabled(!item.enabled || isBusy)
         }
-        .padding(13)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
