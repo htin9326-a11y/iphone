@@ -169,7 +169,7 @@
 		3105A122 /* vi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = vi; path = vi.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105B123 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 
-		AJP10001 /* AujunpeakLicense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AujunpeakLicense.swift; sourceTree = "<group>"; };
+		AJP10001 /* AujunpeakLicense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = helpers/AujunpeakLicense.swift; sourceTree = "<group>"; };
 		AJP10002 /* FunctionLiveBanner.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = FunctionLiveBanner.gif; sourceTree = "<group>"; };
 		AJP10003 /* AppBackground.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = AppBackground.gif; sourceTree = "<group>"; };
 /* End PBXFileReference section */
