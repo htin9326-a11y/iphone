@@ -1,4 +1,3 @@
-
 import Foundation
 import SwiftUI
 import UIKit
@@ -7,26 +6,19 @@ struct ContentView: View {
     @Environment(\.appLanguage) private var language
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var patchDraftCoordinator: PatchDraftCoordinator
-    @AppStorage(FeatureVisibility.cleanerStorageKey) private var cleanerEnabled = false
-    @AppStorage(FeatureVisibility.wallpapersStorageKey) private var wallpapersEnabled = false
+    @EnvironmentObject private var patchStore: PatchProjectStore
+    @EnvironmentObject private var repositoryStore: PackageRepositoryStore
+    @AppStorage(FeatureVisibility.developerModeStorageKey)
+    private var developerModeEnabled = false
     @State private var tabNavigation: AppTabNavigationState
+    @State private var showSettings = false
+    @AppStorage("feature.cleaner.enabled") private var cleanerEnabled = false
+    @AppStorage("feature.wallpapers.enabled") private var wallpapersEnabled = false
+    @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var sideMenuExpanded = false
 
     init() {
-#if targetEnvironment(simulator)
-        let arguments = ProcessInfo.processInfo.arguments
-        let initialTab: Int
-        if arguments.contains("--simulate-files-tab") {
-            initialTab = 1
-        } else if arguments.contains("--simulate-patch-tab") {
-            initialTab = 2
-        } else {
-            initialTab = 0
-        }
-        _tabNavigation = State(initialValue: AppTabNavigationState(selectedTab: initialTab))
-#else
         _tabNavigation = State(initialValue: AppTabNavigationState())
-#endif
     }
 
     var body: some View {
@@ -39,28 +31,24 @@ struct ContentView: View {
         }
         .tint(AppTheme.accent)
         .imageScale(.small)
-        .overlay {
-            SnowParticlesOverlay()
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .zIndex(999)
-        }
         .onChange(of: patchDraftCoordinator.request?.id) { requestID in
-            if requestID != nil { tabNavigation.select(AppSection.files.rawValue) }
+            if requestID != nil { tabNavigation.select(AppSection.installed.rawValue) }
         }
         .onChange(of: patchDraftCoordinator.importRequest?.id) { requestID in
-            if requestID != nil { tabNavigation.select(AppSection.files.rawValue) }
+            if requestID != nil { tabNavigation.select(AppSection.installed.rawValue) }
+        }
+        .onChange(of: developerModeEnabled) { _ in
+            tabNavigation.reconcileSelection(with: featureVisibility)
         }
         .onAppear {
             tabNavigation.reconcileSelection(with: featureVisibility)
         }
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .patchStorePresentation(patchStore)
+        .repositoryStorePresentation(repositoryStore, patchStore: patchStore)
     }
 
     private var compactLayout: some View {
-        // The compact navigation rail is a floating control, not a layout
-        // column.  The previous implementation added a permanent 52pt leading
-        // inset to every screen, which shifted NavigationStack titles and made
-        // cards appear clipped / squeezed on narrow iPhones.
         ZStack(alignment: .leading) {
             sectionContent(selectedVisibleSection)
                 .id(selectedVisibleSection.rawValue)
@@ -77,7 +65,7 @@ struct ContentView: View {
             )
             .padding(.leading, 8)
             .frame(maxHeight: .infinity, alignment: .center)
-            .zIndex(20)
+            .zIndex(80)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.18), value: selectedVisibleSection.rawValue)
@@ -93,35 +81,21 @@ struct ContentView: View {
                             tabNavigation.select(section.rawValue)
                         }
                     } label: {
-                        HStack(spacing: 10) {
-                            if UIImage(named: section.systemImage) != nil {
-                                Image(section.systemImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 18, height: 18)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                            } else {
-                                Image(systemName: section.systemImage)
-                                    .frame(width: 18)
-                            }
-                            Text(section.displayTitle)
-                        }
-                        .fontWeight(section.rawValue == tabNavigation.selectedTab ? .semibold : .regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                        Label(language.text(section.titleKey), systemImage: section.systemImage)
+                            .fontWeight(section.rawValue == tabNavigation.selectedTab ? .semibold : .regular)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(
                         section.rawValue == tabNavigation.selectedTab
-                        ? AppTheme.accent.opacity(0.14)
-                        : Color.clear
+                            ? AppTheme.accent.opacity(0.14)
+                            : Color.clear
                     )
-                    .accessibilityAddTraits(section.rawValue == tabNavigation.selectedTab ? .isSelected : [])
+                    .accessibilityAddTraits(
+                        section.rawValue == tabNavigation.selectedTab ? .isSelected : []
+                    )
                 }
-            }
-            .scrollContentBackground(.hidden)
-            .background {
-                AppAuroraBackground()
             }
             .navigationTitle("Aujunpeak")
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
@@ -140,49 +114,34 @@ struct ContentView: View {
                 cleanerEnabled: $cleanerEnabled,
                 wallpapersEnabled: $wallpapersEnabled,
                 wallpapersSupported: false,
-                onOpenGame: { _ in
+                onOpenGame: { gameKey in
                     tabNavigation.select(AppSection.files.rawValue)
+                    selectedGameKey = gameKey
                 }
             )
-        case .files:
-            // Keep the Function overlay strictly inside the actual compact
-            // viewport.  A wide intrinsic child (such as the file browser)
-            // must never be allowed to make the ZStack wider than the iPhone,
-            // otherwise the Function rows are centered and clipped on both
-            // the leading icon and trailing Toggle.
-            GeometryReader { proxy in
-                ZStack(alignment: .topLeading) {
-                    // Keep the original browser mounted for state/lifecycle,
-                    // but fully cover it while the Function UI is displayed.
-                    AppDataBrowserView(tabSession: filesTabSession)
-                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-
-                    Color.black
-                        .ignoresSafeArea()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .zIndex(1)
-
-                    FunctionOverlayView()
-                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                        .background(Color.black)
-                        .clipped()
-                        .zIndex(2)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                .clipped()
-            }
-        case .patches:
+        case .installed:
             ZStack {
-                PatchProjectsView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PatchProjectsView(
+                    onOpenSettings: openSettings,
+                    onOpenLogs: {}
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 KeyInfoOverlayView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .cleaner:
-            CleanerView()
-        case .wallpapers:
-            WallpaperLabView()
+        case .files:
+            ZStack {
+                AppDataBrowserView(
+                    tabSession: filesTabSession,
+                    onOpenSettings: openSettings,
+                    onOpenLogs: {}
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                FunctionOverlayView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -201,26 +160,40 @@ struct ContentView: View {
     }
 
     private var featureVisibility: FeatureVisibility {
-        FeatureVisibility(cleanerEnabled: false, wallpapersEnabled: false, wallpapersSupported: false)
+        FeatureVisibility(developerModeEnabled: developerModeActive)
+    }
+
+    private var developerModeActive: Bool {
+#if targetEnvironment(simulator)
+        developerModeEnabled
+            || ProcessInfo.processInfo.arguments.contains("--simulate-developer-mode")
+            || ProcessInfo.processInfo.arguments.contains("--simulate-files-tab")
+#else
+        developerModeEnabled
+#endif
     }
 
     private var selectedVisibleSection: AppSection {
-        guard let section = AppSection(rawValue: tabNavigation.selectedTab), featureVisibility.isVisible(section) else {
-            return .home
-        }
-        return section
+        let selected = AppSection(rawValue: tabNavigation.selectedTab)
+        return selected.flatMap {
+            featureVisibility.isVisible($0) ? $0 : nil
+        } ?? .home
     }
+
+    private func openSettings() {
+        showSettings = true
+    }
+
 }
 
-private struct CompactTabLabel: View {
+private struct CompactTabLabel: View
+ {
     let title: String
     let systemImage: String
 
     @ViewBuilder
     var body: some View {
-        if let customImage = UIImage(named: systemImage) {
-            Image(uiImage: customImage.withRenderingMode(.alwaysOriginal))
-        } else if let image = UIImage(
+        if let image = UIImage(
             systemName: systemImage,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
         )?.withRenderingMode(.alwaysTemplate) {
@@ -233,6 +206,31 @@ private struct CompactTabLabel: View {
     }
 }
 
+private extension AppSection {
+    var titleKey: String {
+        switch self {
+        case .home: return "tab.home"
+        case .installed: return "tab.installed"
+        case .files: return "tab.files"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .home: return "house.fill"
+        case .installed: return "key.fill"
+        case .files: return "wand.and.stars"
+        }
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .home: return "Home"
+        case .installed: return "Key Center"
+        case .files: return "Function"
+        }
+    }
+}
 private struct AppSideNavigation: View {
     let sections: [AppSection]
     let selectedTab: Int
@@ -277,28 +275,6 @@ private struct AppSideNavigation: View {
         .background(Color.black.opacity(isExpanded ? 0.32 : 0.12), in: Capsule())
         .overlay { Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1) }
         .shadow(color: Color.black.opacity(0.28), radius: 10, y: 4)
-    }
-}
-
-private extension AppSection {
-    var displayTitle: String {
-        switch self {
-        case .home: return "Trang chủ"
-        case .files: return "Function"
-        case .patches: return "Info"
-        case .cleaner: return "Cleaner"
-        case .wallpapers: return "Wallpapers"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .home: return "house.fill"
-        case .files: return "gearshape.2.fill"
-        case .patches: return "info.circle.fill"
-        case .cleaner: return "sparkles"
-        case .wallpapers: return "photo.on.rectangle.angled"
-        }
     }
 }
 

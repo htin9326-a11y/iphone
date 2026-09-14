@@ -1,26 +1,27 @@
-import Foundation
 import SwiftUI
-import UIKit
 import ImageIO
+
 
 enum AppTheme {
     static let accent = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.45, green: 0.39, blue: 1.00, alpha: 1.00)
-                : UIColor(red: 0.32, green: 0.24, blue: 0.82, alpha: 1.00)
+                ? UIColor(red: 1.00, green: 0.64, blue: 0.42, alpha: 1.00)
+                : UIColor(red: 0.85, green: 0.42, blue: 0.20, alpha: 1.00)
         }
     )
+    // Aujunpeak visual theme compatibility. These values were present in the
+    // previous Aujunpeak UI and are required by the merged overlay views.
     static let secondaryAccent = Color(red: 0.28, green: 0.78, blue: 0.96)
     static let hotPink = Color(red: 0.96, green: 0.32, blue: 0.40)
-    static let pageBackground = Color(uiColor: .systemBackground)
-    static let consoleBackground = Color(uiColor: .secondarySystemBackground)
     static let darkCanvas = Color(red: 0.035, green: 0.035, blue: 0.075)
     static let panel = Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.92)
     static let panelBorder = Color.white.opacity(0.14)
-    static let pageInset: CGFloat = 16
     static let contentMaxWidth: CGFloat = 860
     static let compactPageInset: CGFloat = 14
+    static let pageBackground = Color(uiColor: .systemBackground)
+    static let consoleBackground = Color(uiColor: .secondarySystemBackground)
+    static let pageInset: CGFloat = 16
     static let rowIconSize: CGFloat = 17
     static let rowIconFrame: CGFloat = 28
     static let fileRowIconSize: CGFloat = 17
@@ -29,6 +30,23 @@ enum AppTheme {
     static let appIconSize: CGFloat = 32
     static let emptyIconSize: CGFloat = 30
     static let selectionIconSize: CGFloat = 18
+    static let contentCardCornerRadius: CGFloat = 20
+    static let contentCardInset: CGFloat = 16
+    static let contentCardPadding: CGFloat = 16
+}
+
+struct AppCardBorder: View {
+    var body: some View {
+        RoundedRectangle(
+            cornerRadius: AppTheme.contentCardCornerRadius,
+            style: .continuous
+        )
+        .strokeBorder(
+            Color(uiColor: .separator).opacity(0.22),
+            lineWidth: 0.5
+        )
+        .accessibilityHidden(true)
+    }
 }
 
 struct AppRowIcon: View {
@@ -88,7 +106,6 @@ struct AppSearchField: View {
         )
         .padding(.horizontal, AppTheme.pageInset)
         .padding(.vertical, 8)
-        .frame(maxWidth: AppTheme.contentMaxWidth)
         .background(.bar)
     }
 }
@@ -98,8 +115,12 @@ struct AppLogo: View {
 
     var body: some View {
         Group {
-            if UIImage(named: "AujunpeakLogo") != nil {
-                Image("AujunpeakLogo")
+            if let logo = UIImage(named: "AujunpeakLogo") {
+                Image(uiImage: logo)
+                    .resizable()
+                    .scaledToFill()
+            } else if let icon = UIImage(named: "AppIcon") {
+                Image(uiImage: icon)
                     .resizable()
                     .scaledToFill()
             } else {
@@ -107,22 +128,17 @@ struct AppLogo: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.red, Color.black],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .background(AppTheme.accent)
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-        .shadow(color: .red.opacity(0.22), radius: max(4, size * 0.12), y: 3)
         .accessibilityHidden(true)
     }
 }
 
+
+// MARK: - Aujunpeak VN animated background
 struct AnimatedGIFView: UIViewRepresentable {
     let data: Data
 

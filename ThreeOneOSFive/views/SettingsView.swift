@@ -2,62 +2,100 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("aujunpeak.appearance") private var appearanceMode = "system"
+
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    HStack(spacing: 14) {
-                        AppLogo(size: 54)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Text("Aujunpeak VN")
-                                    .font(.headline)
-                                Image(systemName: "checkmark.seal.fill")
-                                    .foregroundStyle(.blue)
-                            }
-                            Text("Giao diện & thông tin quản trị")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            ZStack {
+                AppTheme.darkCanvas.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        AppLogo(size: 92)
+
+                        VStack(spacing: 6) {
+                            Text("Aujunpeak VN")
+                                .font(.system(size: 26, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("Hà Văn Huấn")
+                                .font(.headline)
+                                .foregroundStyle(.white.opacity(0.78))
                         }
-                    }
-                    .padding(.vertical, 5)
-                }
 
-                Section("Giao diện") {
-                    Picker("Chế độ hiển thị", selection: $appearanceMode) {
-                        Label("Tự động", systemImage: "circle.lefthalf.filled").tag("system")
-                        Label("Sáng", systemImage: "sun.max.fill").tag("light")
-                        Label("Tối", systemImage: "moon.fill").tag("dark")
-                    }
-                    .pickerStyle(.segmented)
-                }
+                        AppGlassPanel(cornerRadius: 22, tint: AppTheme.secondaryAccent) {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Thông tin")
+                                    .font(.headline.weight(.bold))
+                                InfoRow(title: "Ứng dụng", value: "Aujunpeak")
+                                InfoRow(title: "Thương hiệu", value: "Aujunpeak VN")
+                                InfoRow(title: "Quản trị", value: "Hà Văn Huấn")
+                            }
+                            .foregroundStyle(.white)
+                            .padding(18)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
 
-                Section("Admin") {
-                    HStack {
-                        Label("Hà Văn Huấn", systemImage: "person.crop.circle.fill")
-                        Spacer()
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(.blue)
+                        Link(destination: zaloURL) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "message.fill")
+                                    .font(.system(size: 18, weight: .bold))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Liên hệ Zalo")
+                                        .font(.headline.weight(.bold))
+                                    Text("0833 091 543")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.78))
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.headline.weight(.bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(16)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                LinearGradient(
+                                    colors: [AppTheme.accent, AppTheme.hotPink],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    LabeledContent("Ứng dụng", value: "Aujunpeak VN")
-                    Link(destination: zaloURL) {
-                        Label("Liên hệ Zalo", systemImage: "message.fill")
-                            .fontWeight(.semibold)
-                    }
+                    .padding(20)
+                    .frame(maxWidth: 640)
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .tint(AppTheme.accent)
-            .navigationTitle("Cài đặt")
+            .navigationTitle("Aujunpeak")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Xong") { dismiss() }
+                    Button("Đóng") { dismiss() }
                         .fontWeight(.semibold)
                 }
             }
         }
+        .tint(AppTheme.accent)
+    }
+}
+
+private struct InfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(.white.opacity(0.62))
+            Spacer()
+            Text(value)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(.subheadline.weight(.semibold))
     }
 }
