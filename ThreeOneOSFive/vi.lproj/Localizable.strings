@@ -15,7 +15,7 @@
 "common.finish" = "Hoàn thành";
 
 "update.title" = "Có bản cập nhật";
-"update.message" = "Đã có bản cập nhật Aujunpeak mới (%@).";
+"update.message" = "Đã có bản cập nhật Aujunpeak mới.";
 "update.agree" = "Đồng ý";
 "update.dismiss" = "Không hiển thị lại";
 "patch.error.wrong_password" = "Sai mật khẩu.";
