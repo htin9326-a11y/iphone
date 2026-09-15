@@ -22,11 +22,11 @@
 ## Giao diện
 
 <p align="center">
-  <img src="docs/images/home.png" width="245" alt="Trang chủ 3105">
+  <img src="docs/images/home-2.0.png" width="245" alt="Trang chủ 3105 2.0">
   &nbsp;
-  <img src="docs/images/patches.png" width="245" alt="Patch 3105">
+  <img src="docs/images/sources-2.0.png" width="245" alt="Nguồn nội dung 3105 2.0">
   &nbsp;
-  <img src="docs/images/cleaner.png" width="245" alt="Dọn dẹp 3105">
+  <img src="docs/images/installed-2.0.png" width="245" alt="Nội dung đã cài trong 3105 2.0">
 </p>
 
 ## Có gì mới trong 2.0

@@ -169,7 +169,7 @@
 		3105A122 /* vi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = vi; path = vi.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105B123 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 
-		AJP10001 /* AujunpeakLicense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = helpers/AujunpeakLicense.swift; sourceTree = "<group>"; };
+		AJP10001 /* AujunpeakLicense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AujunpeakLicense.swift; sourceTree = "<group>"; };
 		AJP10002 /* FunctionLiveBanner.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = FunctionLiveBanner.gif; sourceTree = "<group>"; };
 		AJP10003 /* AppBackground.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = AppBackground.gif; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -200,16 +200,15 @@
 				3105A060 /* Info.plist */,
 				3105A020 /* App.swift */,
 				3105A021 /* ContentView.swift */,
-				AJP10001 /* AujunpeakLicense.swift */,
-				AJP10002 /* FunctionLiveBanner.gif */,
-				AJP10003 /* AppBackground.gif */,
+			AJP10002 /* FunctionLiveBanner.gif */,
+			AJP10003 /* AppBackground.gif */,
 				3105A403 /* exploit */,
 				3105A404 /* views */,
 				3105A405 /* helpers */,
 				3105A406 /* kexploit */,
 				3105A120 /* Localizable.strings */,
 				3105A031 /* Assets.xcassets */,
-			);
+				);
 			path = ThreeOneOSFive;
 			sourceTree = "<group>";
 		};
@@ -293,6 +292,7 @@
 				3105F105 /* WallpaperLabService.swift */,
 				3105A106 /* AppIconHelper.m */,
 				3105A107 /* AppIconHelper.h */,
+				AJP10001 /* AujunpeakLicense.swift */,
 				3105A202 /* KernelExploit.swift */,
 				3105J201 /* AntiDetection.m */,
 				3105J202 /* DisplayIdentity.h */,
@@ -383,8 +383,6 @@
 			files = (
 				3105A211,
 				3105A228,
-				AJP20002,
-				AJP20003,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -395,7 +393,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3105A200, AJP20001, 3105A201, 3105A203, 3105A204,
+				3105A200, 3105A201, 3105A203, 3105A204,
 				3105A205, 3105A206, 3105A207, 3105A209,
 				3105A210, 3105A220, 3105A221, 3105A222, 3105A223,
 				3105A224, 3105A225,

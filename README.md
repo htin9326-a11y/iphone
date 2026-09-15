@@ -28,11 +28,11 @@
 ## Preview
 
 <p align="center">
-  <img src="docs/images/home.png" width="245" alt="3105 Home">
+  <img src="docs/images/home-2.0.png" width="245" alt="3105 2.0 Home">
   &nbsp;
-  <img src="docs/images/patches.png" width="245" alt="3105 Patches">
+  <img src="docs/images/sources-2.0.png" width="245" alt="3105 2.0 Sources">
   &nbsp;
-  <img src="docs/images/cleaner.png" width="245" alt="3105 Cleaner">
+  <img src="docs/images/installed-2.0.png" width="245" alt="3105 2.0 Installed library">
 </p>
 
 ## What's new in 2.0
