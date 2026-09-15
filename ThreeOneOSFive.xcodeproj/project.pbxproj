@@ -448,6 +448,7 @@
 				3105L203,
 				3105L204,
 				3105L205,
+				AJP20001,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
