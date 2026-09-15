@@ -93,8 +93,7 @@ struct ThreeOneOSFiveApp: App {
                 checkForUpdate()
                 runLicenseCheck()
             }
-            .onChange(of: scenePhase) { phase in
-                guard phase == .active else { return }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 appState.detectSupport()
                 Task { await licenseSession.refreshStatus() }
             }
