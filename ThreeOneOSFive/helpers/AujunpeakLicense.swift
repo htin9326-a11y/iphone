@@ -480,165 +480,220 @@ struct LicenseActivationView: View {
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
     @State private var keyText = ""
     @State private var shake = false
+    @FocusState private var keyFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppAuroraBackground()
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(0.62)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { keyFocused = false }
 
-                ScrollView {
-                    VStack(spacing: 18) {
-                        logo
+                VStack(spacing: 0) {
+                    Capsule()
+                        .fill(AppTheme.borderStrong)
+                        .frame(width: 42, height: 4)
+                        .padding(.top, 10)
+                        .padding(.bottom, 13)
 
-                        AppGlassPanel(cornerRadius: 20, tint: AppTheme.secondaryAccent) {
-                            VStack(spacing: 14) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("LICENSE KEY")
-                                            .font(.caption.weight(.black))
-                                            .tracking(1.4)
-                                            .foregroundStyle(.white.opacity(0.52))
-                                        Text("Nhập key để đồng bộ thiết bị")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .font(.title3)
-                                        .foregroundStyle(AppTheme.secondaryAccent)
-                                }
-
-                            HStack(spacing: 11) {
-                                ZStack {
-                                    Circle().fill(AppTheme.accent.opacity(0.18))
-                                    Image(systemName: "key.fill")
-                                        .foregroundStyle(AppTheme.accent)
-                                }
-                                .frame(width: 38, height: 38)
-
-                                TextField("AJP-XXXXX-XXXXX-XXXXX-XXXXX", text: $keyText)
-                                    .textInputAutocapitalization(.characters)
-                                    .autocorrectionDisabled(true)
-                                    .foregroundStyle(.white)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-                            .padding(.horizontal, 12)
-                            .frame(height: 58)
-                            .background(Color.black.opacity(0.20), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .strokeBorder(AppTheme.accent.opacity(0.42), lineWidth: 1)
-                            }
-
-                            HStack(spacing: 8) {
-                                Image(systemName: "iphone.gen3")
-                                Text("Device ID  •  \(licenseSession.deviceID.prefix(18))…")
-                                    .lineLimit(2)
-                                    .truncationMode(.middle)
-                            }
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.white.opacity(0.45))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            keyPreview
+                            keyField
 
                             if let error = licenseSession.lastError, !error.isEmpty {
-                                HStack(alignment: .top, spacing: 10) {
-                                    Image(systemName: "xmark.octagon.fill")
+                                HStack(alignment: .top, spacing: 9) {
+                                    Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.red)
                                     Text(error)
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.55))
+                                        .foregroundStyle(.white.opacity(0.78))
                                         .fixedSize(horizontal: false, vertical: true)
-                                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                                 }
-                                .padding(12)
-                                .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-
-                            Button {
-                                Task {
-                                    let ok = await licenseSession.activate(key: keyText)
-                                    if !ok {
-                                        await MainActor.run {
-                                            withAnimation(.default.repeatCount(3, autoreverses: true)) { shake.toggle() }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    if licenseSession.isLoading {
-                                        ProgressView().tint(.white)
-                                    } else {
-                                        Image(systemName: "checkmark.shield.fill")
-                                    }
-                                    Text(licenseSession.isLoading ? "Đang xác thực…" : "Kích hoạt Key")
-                                }
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 54)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(AppGradientButtonStyle(colors: [AppTheme.secondaryAccent, AppTheme.accent]))
-                            .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
-
-                            Link(destination: zaloURL) {
-                                HStack(spacing: 9) {
-                                    Image(systemName: "message.fill")
-                                    Text("Liên hệ mua Key")
-                                }
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                                .padding(11)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                         .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                        .strokeBorder(Color.red.opacity(0.20), lineWidth: 1)
                                 }
                             }
-                            .padding(16)
+
+                            loginButton
+                            contactButton
+                            deviceLine
                         }
-                        .offset(x: shake ? -7 : 0)
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 18)
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 28)
-                    .padding(.bottom, 24)
+                }
+                .frame(maxWidth: 560)
+                .frame(height: min(proxy.size.height * 0.78, 620))
+                .background(AppTheme.surface, in: AujunpeakTopSheetShape(radius: 28))
+                .overlay(alignment: .top) {
+                    AujunpeakTopSheetShape(radius: 28)
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.35), radius: 26, y: -8)
+                .offset(x: shake ? -7 : 0)
+                .onAppear {
+                    if keyText.isEmpty { keyText = licenseSession.storedKey }
+                }
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 11) {
+            AppLogo(size: 46)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Aujunpeak")
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Đăng nhập bằng Key để mở toàn bộ chức năng")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "lock.open.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+    }
+
+    private var keyPreview: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "key.horizontal.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(width: 30, height: 30)
+                .background(AppTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("KEY")
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .tracking(1.1)
+                Text(keyText.isEmpty ? "AJP-XXXX-XXXX-XXXX" : keyText.uppercased())
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(11)
+        .background(AppTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        }
+    }
+
+    private var keyField: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "rectangle.and.pencil.and.ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            TextField("Nhập Key của bạn", text: $keyText)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled(true)
+                .textContentType(.password)
+                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                .foregroundStyle(AppTheme.textPrimary)
+                .focused($keyFocused)
+                .submitLabel(.go)
+                .onSubmit { performLogin() }
+
+            Button {
+                keyText = UIPasteboard.general.string ?? keyText
+                keyFocused = true
+            } label: {
+                Image(systemName: "doc.on.clipboard.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 11)
+        .frame(height: 52)
+        .background(AppTheme.base, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
+        }
+    }
+
+    private var loginButton: some View {
+        Button(action: performLogin) {
+            HStack(spacing: 9) {
+                if licenseSession.isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "rectangle.portrait.and.arrow.right.fill")
+                }
+                Text(licenseSession.isLoading ? "Đang kiểm tra…" : "LOGIN KEY")
+            }
+            .font(.headline.weight(.black))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 53)
+        }
+        .buttonStyle(AppGradientButtonStyle(colors: [AppTheme.surfaceElevated, AppTheme.base]))
+        .disabled(licenseSession.isLoading || keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .opacity(keyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+    }
+
+    private var contactButton: some View {
+        Link(destination: zaloURL) {
+            HStack(spacing: 8) {
+                Image(systemName: "bag.fill")
+                Text("Liên hệ mua Key")
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+            }
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(AppTheme.textPrimary)
+            .padding(.horizontal, 13)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deviceLine: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "iphone.gen3")
+            Text("Thiết bị • \(licenseSession.deviceID.prefix(18))…")
+        }
+        .font(.caption2.monospaced())
+        .foregroundStyle(AppTheme.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func performLogin() {
+        let trimmed = keyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !licenseSession.isLoading else { return }
+        keyFocused = false
+        Task {
+            let ok = await licenseSession.activate(key: trimmed)
+            if !ok {
+                await MainActor.run {
+                    withAnimation(.default.repeatCount(3, autoreverses: true)) { shake.toggle() }
                 }
             }
         }
-    }
-
-    }
-
-    private var logo: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [AppTheme.accent.opacity(0.28), AppTheme.hotPink.opacity(0.16)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            if UIImage(named: "AujunpeakLogo") != nil {
-                Image("AujunpeakLogo")
-                    .resizable()
-                    .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            } else {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 44, weight: .black))
-                    .foregroundStyle(AppTheme.accent)
-            }
-        }
-        .frame(width: 112, height: 112)
-        .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(AppTheme.secondaryAccent.opacity(0.52), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.26), radius: 12, y: 6)
     }
 }

@@ -62,6 +62,13 @@ struct ThreeOneOSFiveApp: App {
                     .transition(.opacity)
                     .zIndex(120)
                 }
+
+                if licenseSession.requiresActivation {
+                    LicenseActivationView()
+                        .environmentObject(licenseSession)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(130)
+                }
             }
             .preferredColorScheme(preferredColorScheme)
             .displayIdentityAttribution(isPresented: $showAttribution, enabled: true)
@@ -80,14 +87,7 @@ struct ThreeOneOSFiveApp: App {
                     }
                 )
             }
-            .fullScreenCover(isPresented: Binding(
-                get: { licenseSession.requiresActivation },
-                set: { _ in }
-            )) {
-                LicenseActivationView()
-                    .environmentObject(licenseSession)
-                    .interactiveDismissDisabled(true)
-            }
+            .animation(.easeOut(duration: 0.26), value: licenseSession.requiresActivation)
             .onAppear {
                 appState.detectSupport()
                 checkForUpdate()

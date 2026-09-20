@@ -195,7 +195,7 @@ struct PatchProjectEditorView: View {
             } else {
                 Label(language.text("patch.replacement_required"), systemImage: "exclamationmark.circle.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 3)
@@ -335,7 +335,7 @@ struct PatchRuleEditorView: View {
                                      ? "patch.replacement_required"
                                      : "patch.change_replacement"))
                                     .font(.caption)
-                                    .foregroundStyle(replacementFilename.isEmpty ? Color.orange : Color.secondary)
+                                    .foregroundStyle(replacementFilename.isEmpty ? Color.secondary : Color.secondary)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")

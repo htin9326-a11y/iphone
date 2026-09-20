@@ -3,24 +3,25 @@ import ImageIO
 
 
 enum AppTheme {
-    static let accent = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 1.00, green: 0.64, blue: 0.42, alpha: 1.00)
-                : UIColor(red: 0.85, green: 0.42, blue: 0.20, alpha: 1.00)
-        }
-    )
-    // Aujunpeak visual theme compatibility. These values were present in the
-    // previous Aujunpeak UI and are required by the merged overlay views.
-    static let secondaryAccent = Color(red: 0.28, green: 0.78, blue: 0.96)
-    static let hotPink = Color(red: 0.96, green: 0.32, blue: 0.40)
-    static let darkCanvas = Color(red: 0.035, green: 0.035, blue: 0.075)
-    static let panel = Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.92)
-    static let panelBorder = Color.white.opacity(0.14)
+    // Aujunpeak monochrome UI palette. The app surface is intentionally kept
+    // on one neutral base so every screen feels like the same product.
+    static let base = Color(red: 0.098039, green: 0.101961, blue: 0.109804) // #191A1C
+    static let surface = base
+    static let surfaceElevated = Color(red: 0.118, green: 0.122, blue: 0.130)
+    static let border = Color(red: 0.170, green: 0.180, blue: 0.195)
+    static let borderStrong = Color(red: 0.220, green: 0.230, blue: 0.245)
+    static let textPrimary = Color.white
+    static let textSecondary = Color.white.opacity(0.62)
+    static let accent = Color.white.opacity(0.92)
+    static let secondaryAccent = Color.white.opacity(0.74)
+    static let hotPink = Color.white.opacity(0.74)
+    static let darkCanvas = base
+    static let panel = surface
+    static let panelBorder = border
     static let contentMaxWidth: CGFloat = 860
     static let compactPageInset: CGFloat = 14
-    static let pageBackground = Color(uiColor: .systemBackground)
-    static let consoleBackground = Color(uiColor: .secondarySystemBackground)
+    static let pageBackground = base
+    static let consoleBackground = surfaceElevated
     static let pageInset: CGFloat = 16
     static let rowIconSize: CGFloat = 17
     static let rowIconFrame: CGFloat = 28
@@ -46,6 +47,61 @@ struct AppCardBorder: View {
             lineWidth: 0.5
         )
         .accessibilityHidden(true)
+    }
+}
+
+struct AujunpeakSlantedCardShape: Shape {
+    var cut: CGFloat = 13
+
+    func path(in rect: CGRect) -> Path {
+        let c = min(cut, min(rect.width, rect.height) * 0.18)
+        var path = Path()
+        path.move(to: CGPoint(x: c, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - c * 0.45, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: c))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height - c * 0.7))
+        path.addLine(to: CGPoint(x: rect.width - c * 0.55, y: rect.height))
+        path.addLine(to: CGPoint(x: c, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: rect.height - c))
+        path.addLine(to: CGPoint(x: 0, y: c))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct AujunpeakTopSheetShape: Shape {
+    var radius: CGFloat = 28
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, min(rect.width, rect.height) * 0.25)
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: r))
+        path.addQuadCurve(to: CGPoint(x: r, y: 0), control: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - r, y: 0))
+        path.addQuadCurve(to: CGPoint(x: rect.width, y: r), control: CGPoint(x: rect.width, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct AujunpeakPanel<Content: View>: View {
+    let content: Content
+    var cut: CGFloat = 12
+
+    init(cut: CGFloat = 12, @ViewBuilder content: () -> Content) {
+        self.cut = cut
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: cut))
+            .overlay {
+                AujunpeakSlantedCardShape(cut: cut)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            }
     }
 }
 
@@ -101,12 +157,12 @@ struct AppSearchField: View {
         .padding(.horizontal, 11)
         .frame(minHeight: 36)
         .background(
-            Color(uiColor: .secondarySystemFill),
+            AppTheme.surfaceElevated,
             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
         .padding(.horizontal, AppTheme.pageInset)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(AppTheme.base)
     }
 }
 
@@ -211,12 +267,12 @@ struct AppGlassPanel<Content: View>: View {
 
     var body: some View {
         content
-            .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(tint.opacity(0.34), lineWidth: 1)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
+            .shadow(color: Color.black.opacity(0.28), radius: 14, y: 7)
     }
 }
 
@@ -239,59 +295,39 @@ struct AppCapsuleBadge: View {
 }
 
 struct AppGradientButtonStyle: ButtonStyle {
-    var colors: [Color] = [AppTheme.secondaryAccent, AppTheme.accent]
+    var colors: [Color] = [AppTheme.surfaceElevated, AppTheme.base]
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.82 : 1)
             .background(
                 LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
-            .shadow(color: colors.first?.opacity(0.18) ?? .clear, radius: 9, y: 4)
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.22), radius: 8, y: 4)
     }
 }
 
 struct AppAnimatedBackground: View {
-    var opacity: Double = 0.48
+    var opacity: Double = 1
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                AppTheme.darkCanvas
-                if let data = backgroundData {
-                    AnimatedGIFView(data: data)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .opacity(opacity)
-                } else if UIImage(named: "AppBackgroundNeon") != nil {
-                    Image("AppBackgroundNeon")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
-                        .opacity(opacity)
-                }
-                LinearGradient(
-                    colors: [Color.black.opacity(0.18), Color.black.opacity(0.50), Color.black.opacity(0.86)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
+        AppTheme.base
             .ignoresSafeArea()
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var backgroundData: Data? {
-        guard let url = Bundle.main.url(forResource: "AppBackground", withExtension: "gif") else {
-            return nil
-        }
-        return try? Data(contentsOf: url)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
 struct AppAuroraBackground: View {
     var body: some View {
-        AppAnimatedBackground(opacity: 0.52)
+        AppTheme.base
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

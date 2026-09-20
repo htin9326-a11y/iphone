@@ -272,7 +272,7 @@ struct OnboardingView: View {
 
     private var installPage: some View {
         VStack(spacing: 20) {
-            featureIcon(systemName: "exclamationmark.shield.fill", color: .orange)
+            featureIcon(systemName: "exclamationmark.shield.fill", color: .secondary)
 
             VStack(spacing: 8) {
                 Text(language.text("onboarding.install_title"))
@@ -289,7 +289,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 10) {
                 installBullet(icon: "checkmark.seal.fill", text: language.text("onboarding.install_ok"), color: .green)
                 installBullet(icon: "xmark.octagon.fill", text: language.text("onboarding.install_bad"), color: .red)
-                installBullet(icon: "exclamationmark.triangle.fill", text: language.text("onboarding.install_jailbreak"), color: .orange)
+                installBullet(icon: "exclamationmark.triangle.fill", text: language.text("onboarding.install_jailbreak"), color: .secondary)
             }
             .padding(14)
             .background(

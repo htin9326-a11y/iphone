@@ -97,7 +97,7 @@ struct WallpaperLabView: View {
                             ? "checkmark.shield.fill"
                             : "exclamationmark.triangle.fill"
                     )
-                    .foregroundStyle(report.canInstall ? Color.green : Color.orange)
+                    .foregroundStyle(report.canInstall ? Color.green : Color.secondary)
                     Spacer()
                     Text("MHA-C2")
                         .font(.caption.monospaced())
@@ -681,7 +681,7 @@ struct WallpaperResetSettingsView: View {
                             ? "checkmark.shield.fill"
                             : "exclamationmark.triangle.fill"
                     )
-                    .foregroundStyle(report.canInstall ? Color.green : Color.orange)
+                    .foregroundStyle(report.canInstall ? Color.green : Color.secondary)
                     LabeledContent(language.text("wallpaper.custom_count")) {
                         Text("\(report.customDescriptorCount)")
                             .monospacedDigit()

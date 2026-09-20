@@ -291,47 +291,81 @@ private struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                AppNeonBackground()
+                AppTheme.base
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        Color.clear.frame(height: 68)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        Color.clear.frame(height: 74)
+                        gameCenterHeader
                         shopBannerSection
                         gameGridSection
                         deviceMiniSection
                     }
-                    .frame(maxWidth: 860, alignment: .topLeading)
+                    .frame(maxWidth: AppTheme.contentMaxWidth, alignment: .top)
                     .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 28)
                     .opacity(contentAppeared ? 1 : 0)
-                    .offset(y: contentAppeared ? 0 : 14)
+                    .offset(y: contentAppeared ? 0 : 12)
                 }
-
-                HomeAdminOverlayCard()
-                    .padding(.horizontal, 14)
-                    .padding(.top, 8)
-                    .zIndex(10)
+                .scrollBounceBehavior(.basedOnSize)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape.fill")
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .task {
-                await licenseSession.refreshStatus()
-            }
+            .task { await licenseSession.refreshStatus() }
             .onAppear {
-                withAnimation(.spring(response: 0.62, dampingFraction: 0.82).delay(0.08)) {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.86).delay(0.05)) {
                     contentAppeared = true
                 }
             }
         }
+    }
+
+    private var gameCenterHeader: some View {
+        HStack(spacing: 12) {
+            AppLogo(size: 46)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("GAME CENTER")
+                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .tracking(0.8)
+                Text("Aujunpeak VN")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Link(destination: URL(string: "https://zalo.me/0833091543")!) {
+                Image(systemName: "message.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(AppTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
+                    }
+            }
+        }
+        .padding(13)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.20), radius: 12, y: 5)
     }
 
     private var shopBannerSection: some View {
@@ -341,62 +375,51 @@ private struct DashboardView: View {
                     Image("AujunpeakPromo")
                         .resizable()
                         .scaledToFill()
-                        .frame(height: 188)
+                        .frame(height: 170)
                         .clipped()
                 } else {
-                    LinearGradient(colors: [Color.blue, Color.black], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .frame(height: 188)
+                    AppTheme.surfaceElevated
+                        .frame(height: 170)
                 }
 
                 LinearGradient(
-                    colors: [Color.clear, Color.black.opacity(0.84)],
+                    colors: [Color.clear, Color.black.opacity(0.80)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("AUJUNPEAK VN")
-                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .font(.system(size: 23, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("Panel game • hiệu ứng sáng • nhấn để mở huanha.shop")
+                    Text("Kho chức năng • cập nhật theo game")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.82))
-                    HStack(spacing: 8) {
-                        Label("Shop chính thức", systemImage: "checkmark.seal.fill")
-                        Label("24/7", systemImage: "bolt.fill")
+                        .foregroundStyle(.white.opacity(0.78))
+                    HStack(spacing: 7) {
+                        Label("Shop chính thức", systemImage: "bag.fill")
+                        Label("24/7", systemImage: "clock.fill")
                     }
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(.white.opacity(0.86))
                 }
                 .padding(16)
             }
             .frame(maxWidth: .infinity)
-            .background(Color.black)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [Color.cyan.opacity(0.75), Color.blue.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
             }
-            .shadow(color: Color.blue.opacity(0.24), radius: 22, y: 10)
+            .shadow(color: Color.black.opacity(0.24), radius: 14, y: 7)
         }
         .buttonStyle(.plain)
     }
 
     private var gameGridSection: some View {
         let games = homeGames
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Game Center")
-                        .font(.system(size: 18, weight: .black, design: .rounded))
-                    Text("Chạm để mở Function theo từng game")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        return VStack(alignment: .leading, spacing: 11) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 11) {
                 ForEach(games) { game in
                     Button {
                         selectedGameKey = game.gameKey
@@ -415,7 +438,7 @@ private struct DashboardView: View {
     }
 
     private var deviceMiniSection: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 11) {
             MiniInfoChip(icon: "iphone.gen3", title: "Thiết bị", value: AppInfo.displayMachineName)
             MiniInfoChip(icon: "checkmark.shield.fill", title: "Key", value: licenseSession.license?.status.uppercased() ?? "SYNC")
         }
@@ -448,25 +471,26 @@ private struct MiniInfoChip: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
                 Text(title)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
             Text(value)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .padding(14)
+        .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
         }
     }
 }
@@ -477,102 +501,43 @@ private struct HomeGameCard: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            GameIconView(gameKey: game.gameKey, remoteURL: iconURL, size: 50, cornerRadius: 14)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(game.title)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .allowsTightening(true)
-                Text(game.bundleID)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                    Text("Mở nhanh")
+        AujunpeakPanel(cut: 12) {
+            HStack(spacing: 11) {
+                GameIconView(gameKey: game.gameKey, remoteURL: iconURL, size: 50, cornerRadius: 13)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(game.title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    Text(game.bundleID)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "arrow.up.right")
+                        Text(isSelected ? "Đã chọn" : "Mở function")
+                            .lineLimit(1)
+                    }
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppTheme.textSecondary)
                 }
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(isSelected ? Color.orange : Color.white.opacity(0.72))
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .padding(11)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         }
-        .padding(11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: isSelected
-                    ? [Color.orange.opacity(0.30), Color.red.opacity(0.16)]
-                    : [Color.white.opacity(0.12), Color.white.opacity(0.055)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(isSelected ? Color.orange.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 1)
+            AujunpeakSlantedCardShape(cut: 12)
+                .strokeBorder(isSelected ? AppTheme.borderStrong : AppTheme.border, lineWidth: isSelected ? 1.35 : 1)
         }
         .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
-    }
-}
-
-private struct HomeAdminOverlayCard: View {
-    private let zaloURL = URL(string: "https://zalo.me/0833091543")!
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [AppTheme.accent, AppTheme.accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "person.crop.circle.badge.checkmark")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 48, height: 48)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("GAME CENTER")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .lineLimit(1)
-                Text("Hà Văn Huấn • Aujunpeak VN")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
-                    Text("LIVE")
-                        .font(.caption2.weight(.black))
-                        .foregroundStyle(Color.green)
-                }
-                Link(destination: zaloURL) {
-                    Image(systemName: "message.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 30)
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-            }
-        }
-        .padding(12)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(AppTheme.secondaryAccent.opacity(0.30), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.24), radius: 10, y: 5)
     }
 }
 
@@ -615,12 +580,7 @@ private struct FunctionOverlayView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Opaque base layer prevents the File/Data Browser from
-                // showing through below the Function content.
-                Color.black
-                    .ignoresSafeArea()
-
-                AppNeonBackground()
+                AppTheme.base
                     .ignoresSafeArea()
 
                 GeometryReader { proxy in
@@ -653,7 +613,7 @@ private struct FunctionOverlayView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Function")
+            .navigationTitle("Aujunpeak")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -715,19 +675,12 @@ private struct FunctionOverlayView: View {
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
                     .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .background(
-                        selectedGameKey == game.gameKey
-                            ? Color.orange.opacity(0.18)
-                            : Color.white.opacity(0.05),
-                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    )
+                    .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 10))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        AujunpeakSlantedCardShape(cut: 10)
                             .strokeBorder(
-                                selectedGameKey == game.gameKey
-                                    ? Color.orange.opacity(0.42)
-                                    : Color.white.opacity(0.07),
-                                lineWidth: 1
+                                selectedGameKey == game.gameKey ? AppTheme.borderStrong : AppTheme.border,
+                                lineWidth: selectedGameKey == game.gameKey ? 1.3 : 1
                             )
                     }
                 }
@@ -769,7 +722,7 @@ private struct FunctionOverlayView: View {
             if licenseSession.switches.isEmpty && licenseSession.lastError != nil {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi.exclamationmark")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.textSecondary)
                     Text("Chức năng từ Admin tạm thời chưa đồng bộ")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -777,94 +730,39 @@ private struct FunctionOverlayView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(10)
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var functionHeader: some View {
-        ZStack(alignment: .topLeading) {
-            if let data = functionBannerData {
-                AnimatedGIFView(data: data)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .clipped()
-            } else {
-                LinearGradient(
-                    colors: [Color(red: 0.02, green: 0.12, blue: 0.18), Color.black],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-
-            LinearGradient(
-                colors: [Color.black.opacity(0.00), Color.black.opacity(0.24), Color.black.opacity(0.82)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 8) {
-                    Text("FUNCTION CENTER")
-                        .font(.system(size: 9.5, weight: .black, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.86))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.70)
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("LIVE")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                    }
-                    .foregroundStyle(Color.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.green.opacity(0.15), in: Capsule())
-                    .overlay {
-                        Capsule().strokeBorder(Color.cyan.opacity(0.60), lineWidth: 1)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
+        HStack(spacing: 11) {
+            AppLogo(size: 44)
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Aujunpeak VN")
-                    .font(.system(size: 21, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.76)
-
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
                 Text("Chọn game và bật chức năng bạn cần")
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.76))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.76)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            Spacer(minLength: 0)
+            Image(systemName: "bolt.horizontal.circle.fill")
+                .font(.title3)
+                .foregroundStyle(AppTheme.textPrimary)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 142, alignment: .center)
-        .background(Color.black.opacity(0.75))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 74)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.cyan.opacity(0.38), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
         }
-        .shadow(color: Color.cyan.opacity(0.10), radius: 10, y: 5)
+        .shadow(color: Color.black.opacity(0.18), radius: 10, y: 5)
     }
 
-    private var functionBannerData: Data? {
-        guard let url = Bundle.main.url(forResource: "FunctionLiveBanner", withExtension: "gif") else {
-            return nil
-        }
-        return try? Data(contentsOf: url)
-    }
+    private var functionBannerData: Data? { nil }
 
     private var functionTargetCard: some View {
         HStack(spacing: 9) {
@@ -965,13 +863,13 @@ private struct RemoteFunctionSwitchCard: View {
         HStack(alignment: .center, spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isOn ? Color.red.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
+                    .fill(isOn ? AppTheme.surfaceElevated : AppTheme.surface)
                 if isBusy {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: item.icon.isEmpty ? "bolt.fill" : item.icon)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isOn ? Color.red : Color.secondary)
+                        .foregroundStyle(isOn ? AppTheme.textPrimary : Color.secondary)
                 }
             }
             .frame(width: 34, height: 34)
@@ -983,7 +881,7 @@ private struct RemoteFunctionSwitchCard: View {
                     .truncationMode(.tail)
                 Text(operationMessage ?? displaySubtitle)
                     .font(.system(size: 10.5))
-                    .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : (item.enabled ? Color.secondary : Color.orange))
+                    .foregroundStyle(operationMessage?.hasPrefix("Lỗi:") == true ? Color.red : AppTheme.textSecondary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .minimumScaleFactor(0.8)
@@ -1004,7 +902,7 @@ private struct RemoteFunctionSwitchCard: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
-            .tint(isOn ? Color.red : AppTheme.accent)
+            .tint(isOn ? AppTheme.textPrimary : AppTheme.secondaryAccent)
             .frame(width: 46, alignment: .trailing)
             .fixedSize(horizontal: true, vertical: false)
             .disabled(!item.enabled || isBusy)
@@ -1015,7 +913,7 @@ private struct RemoteFunctionSwitchCard: View {
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isOn ? Color.red.opacity(0.42) : Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(isOn ? AppTheme.borderStrong : AppTheme.border, lineWidth: 1)
         }
         .opacity(item.enabled ? 1 : 0.65)
         .onAppear { isOn = item.enabled && LocalRemoteSwitchService.isEnabled(item) }
@@ -1470,7 +1368,7 @@ private struct KeyInfoOverlayView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [AppTheme.accent.opacity(0.62), Color.blue.opacity(0.32), Color.white.opacity(0.10)],
+                        colors: [AppTheme.accent.opacity(0.62), AppTheme.border, Color.white.opacity(0.10)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -1529,7 +1427,7 @@ private struct KeyInfoOverlayView: View {
                 Spacer()
                 HStack(spacing: 5) {
                     Text("Hà Văn Huấn")
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.blue)
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(AppTheme.textPrimary)
                 }
             }
             Divider()
@@ -1542,7 +1440,7 @@ private struct KeyInfoOverlayView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(LinearGradient(colors: [AppTheme.surfaceElevated, AppTheme.base], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .padding(.top, 4)
 
@@ -1560,7 +1458,7 @@ private struct KeyInfoOverlayView: View {
     }
 
     private var licenseIsActive: Bool { licenseSession.license?.status == "active" }
-    private var licenseStatusColor: Color { licenseIsActive ? .green : .orange }
+    private var licenseStatusColor: Color { licenseIsActive ? .green : AppTheme.textSecondary }
 
     private var licenseStatusText: String {
         switch licenseSession.license?.status {
@@ -1833,6 +1731,8 @@ private struct SnowParticlesOverlay: View {
 
 private struct AppNeonBackground: View {
     var body: some View {
-        AppAnimatedBackground(opacity: 0.42)
+        AppTheme.base
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
     }
 }
