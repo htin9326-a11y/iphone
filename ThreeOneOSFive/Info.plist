@@ -35,6 +35,13 @@
             </array>
         </dict>
     </array>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>freefire</string>
+        <string>freefireth</string>
+        <string>com.dts.freefire</string>
+        <string>com.dts.freefireth</string>
+    </array>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

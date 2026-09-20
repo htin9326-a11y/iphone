@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import Combine
 import CryptoKit
 
 // MARK: - Aujunpeak VN License / Admin Server
@@ -475,15 +476,54 @@ struct LicenseCheckOverlay: View {
     }
 }
 
+final class LicenseKeyboardObserver: ObservableObject {
+    @Published private(set) var height: CGFloat = 0
+    private var cancellables: Set<AnyCancellable> = []
+
+    init() {
+        let center = NotificationCenter.default
+        center.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+            .merge(with: center.publisher(for: UIResponder.keyboardWillHideNotification))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self else { return }
+                if notification.name == UIResponder.keyboardWillHideNotification {
+                    withAnimation(.easeOut(duration: 0.22)) { self.height = 0 }
+                    return
+                }
+                guard
+                    let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                    let window = UIApplication.shared.connectedScenes
+                        .compactMap({ $0 as? UIWindowScene })
+                        .flatMap({ $0.windows })
+                        .first(where: { $0.isKeyWindow })
+                else { return }
+                let converted = window.convert(frame, from: nil)
+                let overlap = max(0, window.bounds.maxY - converted.minY - window.safeAreaInsets.bottom)
+                let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.22
+                withAnimation(.easeOut(duration: duration)) { self.height = overlap }
+            }
+            .store(in: &cancellables)
+    }
+}
+
 struct LicenseActivationView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     private let zaloURL = URL(string: "https://zalo.me/0833091543")!
     @State private var keyText = ""
     @State private var shake = false
+    @StateObject private var keyboard = LicenseKeyboardObserver()
     @FocusState private var keyFocused: Bool
 
     var body: some View {
         GeometryReader { proxy in
+            let screenHeight = max(proxy.size.height, 1)
+            let keyboardHeight = keyboard.height
+            let idealHeight = min(screenHeight * 0.78, 620)
+            let availableHeight = max(420, screenHeight - keyboardHeight - 12)
+            let sheetHeight = min(idealHeight, availableHeight)
+            let bottomLift = keyboardHeight > 0 ? keyboardHeight + 8 : 8
+
             ZStack(alignment: .bottom) {
                 Color.black.opacity(0.62)
                     .ignoresSafeArea()
@@ -495,10 +535,10 @@ struct LicenseActivationView: View {
                         .fill(AppTheme.borderStrong)
                         .frame(width: 42, height: 4)
                         .padding(.top, 10)
-                        .padding(.bottom, 13)
+                        .padding(.bottom, 12)
 
                     ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 14) {
                             header
                             keyPreview
                             keyField
@@ -517,7 +557,7 @@ struct LicenseActivationView: View {
                                 .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .strokeBorder(Color.red.opacity(0.20), lineWidth: 1)
+                                        .stroke(Color.red.opacity(0.20), lineWidth: 1)
                                 }
                             }
 
@@ -528,21 +568,23 @@ struct LicenseActivationView: View {
                         .padding(.horizontal, 18)
                         .padding(.bottom, 18)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                 }
                 .frame(maxWidth: 560)
-                .frame(height: min(proxy.size.height * 0.78, 620))
+                .frame(height: sheetHeight)
                 .background(AppTheme.surface, in: AujunpeakTopSheetShape(radius: 28))
                 .overlay(alignment: .top) {
                     AujunpeakTopSheetShape(radius: 28)
                         .stroke(AppTheme.border, lineWidth: 1)
                 }
                 .shadow(color: Color.black.opacity(0.35), radius: 26, y: -8)
+                .padding(.bottom, bottomLift)
                 .offset(x: shake ? -7 : 0)
                 .onAppear {
                     if keyText.isEmpty { keyText = licenseSession.storedKey }
                 }
             }
-            .ignoresSafeArea()
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
     }
 
@@ -604,7 +646,7 @@ struct LicenseActivationView: View {
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled(true)
                 .textContentType(.password)
-                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                .font(.system(size: 16, weight: .medium, design: .monospaced))
                 .foregroundStyle(AppTheme.textPrimary)
                 .focused($keyFocused)
                 .submitLabel(.go)

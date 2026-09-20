@@ -11,7 +11,6 @@ struct ContentView: View {
     @AppStorage(FeatureVisibility.developerModeStorageKey)
     private var developerModeEnabled = false
     @State private var tabNavigation: AppTabNavigationState
-    @State private var showSettings = false
     @AppStorage("feature.cleaner.enabled") private var cleanerEnabled = false
     @AppStorage("feature.wallpapers.enabled") private var wallpapersEnabled = false
     @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
@@ -68,6 +67,12 @@ struct ContentView: View {
             .zIndex(80)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topTrailing) {
+            persistentSettingsButton
+                .padding(.trailing, 14)
+                .padding(.top, 8)
+                .zIndex(200)
+        }
         .animation(.easeInOut(duration: 0.18), value: selectedVisibleSection.rawValue)
         .animation(.easeInOut(duration: 0.18), value: sideMenuExpanded)
     }
@@ -104,6 +109,12 @@ struct ContentView: View {
                 .id(selectedVisibleSection.rawValue)
         }
         .navigationSplitViewStyle(.balanced)
+        .overlay(alignment: .topTrailing) {
+            persistentSettingsButton
+                .padding(.trailing, 14)
+                .padding(.top, 8)
+                .zIndex(200)
+        }
     }
 
     @ViewBuilder
@@ -178,6 +189,23 @@ struct ContentView: View {
         return selected.flatMap {
             featureVisibility.isVisible($0) ? $0 : nil
         } ?? .home
+    }
+
+    private var persistentSettingsButton: some View {
+        Button(action: openSettings) {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 8))
+                .overlay {
+                    AujunpeakSlantedCardShape(cut: 8)
+                        .stroke(AppTheme.borderStrong, lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.22), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cài đặt")
     }
 
     private func openSettings() {
@@ -280,8 +308,8 @@ private struct AppSideNavigation: View {
 
 private struct DashboardView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
-    @State private var showSettings = false
     @State private var contentAppeared = false
+    @State private var showWelcomeNotice = true
     @Binding var cleanerEnabled: Bool
     @Binding var wallpapersEnabled: Bool
     let wallpapersSupported: Bool
@@ -309,25 +337,76 @@ private struct DashboardView: View {
                     .opacity(contentAppeared ? 1 : 0)
                     .offset(y: contentAppeared ? 0 : 12)
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundStyle(AppTheme.textPrimary)
-                    }
-                    .buttonStyle(.plain)
+
+                if showWelcomeNotice {
+                    welcomeNotice
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.96)))
+                        .zIndex(20)
                 }
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .navigationBarTitleDisplayMode(.inline)
             .task { await licenseSession.refreshStatus() }
             .onAppear {
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.86).delay(0.05)) {
                     contentAppeared = true
                 }
+                Task {
+                    try? await Task.sleep(nanoseconds: 7_000_000_000)
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                            showWelcomeNotice = false
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private var welcomeNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.surfaceElevated)
+                    .frame(width: 34, height: 34)
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Thông báo")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Chào anh em mình là Huấn Hà đây • App Aujunpeak VN cân Rank S1VN")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
+                    showWelcomeNotice = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .background(AppTheme.surface, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(11)
+        .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 10))
+        .overlay {
+            AujunpeakSlantedCardShape(cut: 10)
+                .stroke(AppTheme.borderStrong, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.25), radius: 16, y: 6)
     }
 
     private var gameCenterHeader: some View {
@@ -391,9 +470,6 @@ private struct DashboardView: View {
                     Text("AUJUNPEAK VN")
                         .font(.system(size: 23, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("Kho chức năng • cập nhật theo game")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.78))
                     HStack(spacing: 7) {
                         Label("Shop chính thức", systemImage: "bag.fill")
                         Label("24/7", systemImage: "clock.fill")
@@ -404,11 +480,11 @@ private struct DashboardView: View {
                 .padding(16)
             }
             .frame(maxWidth: .infinity)
-            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 16))
+            .clipShape(AujunpeakSlantedCardShape(cut: 16))
             .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(AppTheme.borderStrong, lineWidth: 1)
+                AujunpeakSlantedCardShape(cut: 16)
+                    .stroke(AppTheme.borderStrong, lineWidth: 1.1)
             }
             .shadow(color: Color.black.opacity(0.24), radius: 14, y: 7)
         }
@@ -545,6 +621,8 @@ private struct FunctionOverlayView: View {
     @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var refreshToken = 0
     @State private var contentAppeared = false
+    @State private var showFunctionMenu = false
+    @State private var injectorNotice: String?
 
     private var availableGames: [RemoteGameSection] {
         let defaults = RemoteGameSection.fallbackGames
@@ -592,9 +670,14 @@ private struct FunctionOverlayView: View {
                         VStack(alignment: .center, spacing: 10) {
                             VStack(alignment: .center, spacing: 10) {
                                 functionHeader
+                                if showFunctionMenu {
+                                    functionMenuPanel
+                                        .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.96, anchor: .top)))
+                                }
                                 gameSelector
                                 functionTargetCard
                                 remoteFunctions
+                                injectorExternalButton
                                 statusCard
                                     .id(refreshToken)
                             }
@@ -614,13 +697,6 @@ private struct FunctionOverlayView: View {
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Aujunpeak")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { Task { await licenseSession.refreshStatus() } } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-            }
             .onAppear {
                 withAnimation(.spring(response: 0.58, dampingFraction: 0.84).delay(0.05)) {
                     contentAppeared = true
@@ -754,9 +830,17 @@ private struct FunctionOverlayView: View {
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 0)
-            Image(systemName: "bolt.horizontal.circle.fill")
-                .font(.title3)
-                .foregroundStyle(AppTheme.textPrimary)
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                    showFunctionMenu.toggle()
+                }
+            } label: {
+                Image(systemName: showFunctionMenu ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 74)
@@ -766,6 +850,62 @@ private struct FunctionOverlayView: View {
                 .strokeBorder(AppTheme.border, lineWidth: 1)
         }
         .shadow(color: Color.black.opacity(0.18), radius: 10, y: 5)
+    }
+
+    private var functionMenuPanel: some View {
+        HStack(spacing: 10) {
+            functionMenuIcon(title: "GAME", icon: "gamecontroller.fill")
+            functionMenuIcon(title: "SWITCH", icon: "switch.2")
+            functionMenuIcon(title: "KEY", icon: "key.fill")
+            Button { Task { await licenseSession.refreshStatus() } } label: {
+                VStack(spacing: 5) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("SYNC")
+                        .font(.system(size: 8.5, weight: .black, design: .rounded))
+                }
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(AppTheme.surfaceElevated, in: AujunpeakSlantedCardShape(cut: 9))
+                .overlay {
+                    AujunpeakSlantedCardShape(cut: 9)
+                        .stroke(AppTheme.borderStrong, lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(9)
+        .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 12))
+        .overlay {
+            AujunpeakSlantedCardShape(cut: 12)
+                .stroke(AppTheme.border, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.22), radius: 12, y: 5)
+    }
+
+    private func functionMenuIcon(title: String, icon: String) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                showFunctionMenu = false
+            }
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .bold))
+                Text(title)
+                    .font(.system(size: 8.5, weight: .black, design: .rounded))
+            }
+            .foregroundStyle(AppTheme.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(AppTheme.surfaceElevated, in: AujunpeakSlantedCardShape(cut: 9))
+            .overlay {
+                AujunpeakSlantedCardShape(cut: 9)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var functionBannerData: Data? { nil }
@@ -810,6 +950,70 @@ private struct FunctionOverlayView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.red.opacity(0.16), lineWidth: 1)
         }
+    }
+
+    private var activeSwitchCount: Int {
+        visibleSwitches.filter { $0.enabled && LocalRemoteSwitchService.isEnabled($0) }.count
+    }
+
+    private var injectorExternalButton: some View {
+        let isFreeFire = currentGame.gameKey == "freefire" || currentGame.bundleID == "com.dts.freefire" || currentGame.bundleID == "com.dts.freefireth"
+        let enabled = isFreeFire && activeSwitchCount > 0
+        return Button {
+            openFreeFire()
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: enabled ? "arrow.up.forward.app.fill" : "lock.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Injector External")
+                    .font(.subheadline.weight(.black))
+                Spacer(minLength: 0)
+                Text(enabled ? "READY" : "BẬT FUNCTION")
+                    .font(.system(size: 8.5, weight: .black, design: .rounded))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(AppTheme.surface, in: Capsule())
+            }
+            .foregroundStyle(AppTheme.textPrimary)
+            .padding(.horizontal, 13)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(enabled ? AppTheme.surfaceElevated : AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 10))
+            .overlay {
+                AujunpeakSlantedCardShape(cut: 10)
+                    .stroke(enabled ? AppTheme.borderStrong : AppTheme.border, lineWidth: 1.1)
+            }
+            .shadow(color: Color.black.opacity(0.18), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.58)
+        .alert("Không thể mở Free Fire", isPresented: Binding(
+            get: { injectorNotice != nil },
+            set: { if !$0 { injectorNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(injectorNotice ?? "Free Fire chưa cung cấp URL scheme có thể mở trực tiếp từ app này.")
+        }
+    }
+
+    private func openFreeFire() {
+        let schemes = ["freefire://", "freefireth://", "com.dts.freefire://", "com.dts.freefireth://"]
+        for raw in schemes {
+            guard let url = URL(string: raw) else { continue }
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url, options: [:]) { success in
+                    if !success {
+                        Task { @MainActor in
+                            injectorNotice = "iOS đã từ chối URL scheme \(raw)."
+                        }
+                    }
+                }
+                return
+            }
+        }
+        injectorNotice = "Không tìm thấy URL scheme đã đăng ký của Free Fire. Bundle ID hiện tại là \(currentGame.bundleID). iOS không cho phép mở app khác chỉ bằng bundle ID; Free Fire cần hỗ trợ custom URL scheme hoặc universal link."
     }
 
     private var statusCard: some View {
@@ -916,10 +1120,10 @@ private struct RemoteFunctionSwitchCard: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, minHeight: 56, maxHeight: 64, alignment: .leading)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppTheme.panel, in: AujunpeakSlantedCardShape(cut: 10))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isOn ? AppTheme.borderStrong : AppTheme.border, lineWidth: 1)
+            AujunpeakSlantedCardShape(cut: 10)
+                .stroke(isOn ? AppTheme.borderStrong : AppTheme.border, lineWidth: 1.05)
         }
         .opacity(item.enabled ? 1 : 0.65)
         .onAppear { isOn = item.enabled && LocalRemoteSwitchService.isEnabled(item) }
@@ -1224,247 +1428,104 @@ private enum LocalRemoteSwitchService {
 private struct KeyInfoOverlayView: View {
     @EnvironmentObject private var licenseSession: LicenseSession
     @State private var contentAppeared = false
-    private let zaloURL = URL(string: "https://zalo.me/0833091543")!
 
     var body: some View {
         NavigationStack {
             ZStack {
-                AppNeonBackground()
+                AppTheme.base
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        keyHeader
-                        keyDetails
-                        deviceDetails
-                        adminCard
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        keyCard
                     }
-                    .frame(maxWidth: 860, alignment: .topLeading)
+                    .frame(maxWidth: 720, alignment: .top)
                     .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 10)
+                    .padding(.bottom, 26)
                     .opacity(contentAppeared ? 1 : 0)
                     .offset(y: contentAppeared ? 0 : 12)
                 }
-                .refreshable { await licenseSession.refreshStatus() }
             }
-            .navigationTitle("Info")
+            .navigationTitle("KEY")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { Task { await licenseSession.refreshStatus() } } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-            }
             .onAppear {
-                withAnimation(.spring(response: 0.58, dampingFraction: 0.84).delay(0.05)) {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.86).delay(0.04)) {
                     contentAppeared = true
                 }
+                Task { await licenseSession.refreshStatus() }
             }
         }
     }
 
-    private var keyHeader: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.12, green: 0.05, blue: 0.20),
-                                Color(red: 0.04, green: 0.10, blue: 0.22),
-                                Color.black
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                VStack(alignment: .leading, spacing: 17) {
-                    HStack(spacing: 11) {
-                        AppLogo(size: 52)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("AUJUNPEAK VN")
-                                .font(.system(size: 18, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Text("LICENSE CENTER")
-                                .font(.caption2.weight(.bold))
-                                .tracking(1.4)
-                                .foregroundStyle(.white.opacity(0.62))
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "checkmark.shield.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(AppTheme.secondaryAccent)
-                    }
-
-                    HStack(alignment: .bottom, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("KEY INFORMATION")
-                                .font(.system(size: 20, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.76)
-                            Text("Thông tin kích hoạt và thiết bị")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.68))
-                                .lineLimit(2)
-                        }
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-
-                        Spacer(minLength: 8)
-
-                        Text(licenseStatusText)
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(licenseStatusColor)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.trailing)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(licenseStatusColor.opacity(0.16), in: Capsule())
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(licenseStatusColor.opacity(0.30), lineWidth: 1)
-                            }
-                    }
+    private var keyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                AppLogo(size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Aujunpeak VN")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(licenseStatusText)
+                        .font(.caption2.weight(.black))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(18)
-            }
-            .frame(height: 168)
-
-            HStack(spacing: 0) {
-                InfoHeroStat(
-                    title: "THIẾT BỊ",
-                    value: "\(licenseSession.license?.deviceCount ?? 0)/\(licenseSession.license?.maxDevices ?? 0)",
-                    icon: "iphone"
-                )
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 1, height: 30)
-
-                InfoHeroStat(
-                    title: "THỜI HẠN",
-                    value: "\(licenseSession.license?.durationDays ?? 0) ngày",
-                    icon: "calendar"
-                )
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 1, height: 30)
-
-                InfoHeroStat(
-                    title: "VERSION",
-                    value: AppUpdateChecker.currentVersion,
-                    icon: "bolt.fill"
-                )
-            }
-            .padding(.vertical, 14)
-            .background(Color.black.opacity(0.24))
-        }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [AppTheme.accent.opacity(0.62), AppTheme.border, Color.white.opacity(0.10)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        }
-        .shadow(color: Color.black.opacity(0.22), radius: 10, y: 5)
-    }
-
-    private var keyDetails: some View {
-        InfoCard(title: "KEY", icon: "key.horizontal.fill") {
-            InfoLine(title: "Key", value: licenseSession.license?.key ?? licenseSession.storedKey, monospaced: true)
-            Divider()
-            InfoLine(title: "Trạng thái", value: licenseStatusText)
-            Divider()
-            InfoLine(title: "Kích hoạt", value: displayDate(licenseSession.license?.activatedAt))
-            Divider()
-            InfoLine(title: "Hết hạn", value: displayDate(licenseSession.license?.expiresAt))
-            Divider()
-            InfoLine(title: "Thời hạn", value: "\(licenseSession.license?.durationDays ?? 0) ngày")
-            Divider()
-            InfoLine(title: "Thiết bị", value: "\(licenseSession.license?.deviceCount ?? 0) / \(licenseSession.license?.maxDevices ?? 0)")
-
-            Button {
-                UIPasteboard.general.string = licenseSession.license?.key ?? licenseSession.storedKey
-            } label: {
-                Label("Sao chép Key", systemImage: "doc.on.doc")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.accent)
-            .padding(.top, 4)
-        }
-    }
-
-    private var deviceDetails: some View {
-        InfoCard(title: "THIẾT BỊ", icon: "iphone") {
-            InfoLine(title: "Model", value: AppInfo.hardwareDisplayName)
-            Divider()
-            InfoLine(title: "iOS", value: AppInfo.osVersion)
-            Divider()
-            InfoLine(title: "Build", value: AppInfo.osBuild, monospaced: true)
-            Divider()
-            InfoLine(title: "App version", value: AppUpdateChecker.currentVersion)
-            Divider()
-            InfoLine(title: "Device ID", value: licenseSession.deviceID, monospaced: true)
-        }
-    }
-
-    private var adminCard: some View {
-        InfoCard(title: "HỖ TRỢ", icon: "person.crop.circle.badge.checkmark") {
-            HStack {
-                Text("Admin").foregroundStyle(.secondary)
                 Spacer()
-                HStack(spacing: 5) {
-                    Text("Hà Văn Huấn")
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(AppTheme.textPrimary)
-                }
+                Image(systemName: "key.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.surfaceElevated, in: Circle())
             }
-            Divider()
-            InfoLine(title: "Panel", value: "Aujunpeak VN License")
-            Divider()
-            InfoLine(title: "Kênh liên hệ", value: "Zalo")
-            Link(destination: zaloURL) {
-                Label("Liên hệ Admin qua Zalo", systemImage: "message.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background(LinearGradient(colors: [AppTheme.surfaceElevated, AppTheme.base], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .padding(.top, 4)
+
+            Divider().overlay(AppTheme.border)
+
+            ReadOnlyKeyField(title: "KEY", value: licenseSession.license?.key ?? licenseSession.storedKey, monospaced: true)
+            ReadOnlyKeyField(title: "TRẠNG THÁI", value: licenseStatusText)
+            ReadOnlyKeyField(title: "KÍCH HOẠT", value: displayDate(licenseSession.license?.activatedAt))
+            ReadOnlyKeyField(title: "HẾT HẠN", value: displayDate(licenseSession.license?.expiresAt))
+            ReadOnlyKeyField(title: "THỜI HẠN", value: "\(licenseSession.license?.durationDays ?? 0) ngày")
+            ReadOnlyKeyField(title: "THIẾT BỊ", value: "\(licenseSession.license?.deviceCount ?? 0) / \(licenseSession.license?.maxDevices ?? 0)")
+            ReadOnlyKeyField(title: "DEVICE ID", value: licenseSession.deviceID, monospaced: true)
+            ReadOnlyKeyField(title: "MODEL", value: AppInfo.hardwareDisplayName)
+            ReadOnlyKeyField(title: "iOS", value: AppInfo.osVersion)
+            ReadOnlyKeyField(title: "BUILD", value: AppInfo.osBuild, monospaced: true)
+            ReadOnlyKeyField(title: "APP VERSION", value: AppUpdateChecker.currentVersion)
 
             Button(role: .destructive) {
                 licenseSession.forgetKey()
             } label: {
-                Label("Đổi / đăng xuất Key", systemImage: "rectangle.portrait.and.arrow.right")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("Đổi / đăng xuất Key")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .background(AppTheme.surfaceElevated, in: AujunpeakSlantedCardShape(cut: 9))
+                .overlay {
+                    AujunpeakSlantedCardShape(cut: 9)
+                        .stroke(AppTheme.border, lineWidth: 1)
+                }
             }
-            .buttonStyle(.bordered)
-            .padding(.top, 4)
+            .buttonStyle(.plain)
         }
+        .padding(14)
+        .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 14))
+        .overlay {
+            AujunpeakSlantedCardShape(cut: 14)
+                .stroke(AppTheme.borderStrong, lineWidth: 1.1)
+        }
+        .shadow(color: Color.black.opacity(0.22), radius: 16, y: 7)
     }
 
     private var licenseIsActive: Bool { licenseSession.license?.status == "active" }
-    private var licenseStatusColor: Color { licenseIsActive ? .green : AppTheme.textSecondary }
+    private var licenseStatusColor: Color { licenseIsActive ? AppTheme.textPrimary : AppTheme.textSecondary }
 
     private var licenseStatusText: String {
         switch licenseSession.license?.status {
@@ -1476,109 +1537,56 @@ private struct KeyInfoOverlayView: View {
         }
     }
 
-    private func displayDate(_ raw: String?) -> String {
-        guard let raw, !raw.isEmpty else { return "Chưa" }
-        let input = DateFormatter()
-        input.locale = Locale(identifier: "en_US_POSIX")
-        input.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        guard let date = input.date(from: raw) else { return raw }
-        let output = DateFormatter()
-        output.locale = Locale(identifier: "vi_VN")
-        output.dateFormat = "dd/MM/yyyy HH:mm"
-        return output.string(from: date)
+    private func displayDate(_ value: String?) -> String {
+        guard let value, !value.isEmpty else { return "—" }
+        return value
     }
 }
 
-private struct InfoHeroStat: View {
-    let title: String
-    let value: String
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppTheme.accent)
-            Text(value)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            Text(title)
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.7)
-                .foregroundStyle(.white.opacity(0.52))
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct InfoCard<Content: View>: View {
-    let title: String
-    let icon: String
-    let content: Content
-
-    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(AppTheme.secondaryAccent.opacity(0.14))
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(AppTheme.secondaryAccent)
-                }
-                .frame(width: 28, height: 28)
-                Text(title)
-                    .font(.caption.weight(.bold))
-                    .tracking(0.7)
-                    .foregroundStyle(.white.opacity(0.72))
-            }
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(15)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.13), lineWidth: 1)
-        }
-        .overlay(alignment: .leading) {
-            Capsule()
-                .fill(AppTheme.secondaryAccent)
-                .frame(width: 3)
-                .padding(.vertical, 16)
-        }
-        .shadow(color: Color.black.opacity(0.22), radius: 10, y: 5)
-    }
-}
-
-private struct InfoLine: View {
+private struct ReadOnlyKeyField: View {
     let title: String
     let value: String
     var monospaced = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 10)
-            Text(value)
-                .font(monospaced ? .caption.monospaced() : .subheadline.weight(.semibold))
-                .multilineTextAlignment(.trailing)
-                .lineLimit(3)
-                .minimumScaleFactor(0.62)
-                .allowsTightening(true)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 9.5, weight: .black, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .tracking(0.7)
+
+                TextField("", text: .constant(value))
+                    .font(.system(size: 14, weight: .semibold, design: monospaced ? .monospaced : .default))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .disabled(true)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                UIPasteboard.general.string = value
+            } label: {
+                Image(systemName: "doc.on.doc.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(AppTheme.surface, in: Circle())
+                    .overlay {
+                        Circle().stroke(AppTheme.border, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Sao chép \(title)")
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(AppTheme.base, in: AujunpeakSlantedCardShape(cut: 8))
+        .overlay {
+            AujunpeakSlantedCardShape(cut: 8)
+                .stroke(AppTheme.border, lineWidth: 1)
         }
     }
 }
