@@ -309,7 +309,6 @@ private struct DashboardView: View {
                     .opacity(contentAppeared ? 1 : 0)
                     .offset(y: contentAppeared ? 0 : 12)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -535,7 +534,7 @@ private struct HomeGameCard: View {
         }
         .overlay {
             AujunpeakSlantedCardShape(cut: 12)
-                .strokeBorder(isSelected ? AppTheme.borderStrong : AppTheme.border, lineWidth: isSelected ? 1.35 : 1)
+                .stroke(isSelected ? AppTheme.borderStrong : AppTheme.border, lineWidth: isSelected ? 1.35 : 1)
         }
         .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
     }
@@ -637,57 +636,64 @@ private struct FunctionOverlayView: View {
     }
 
     private var gameSelector: some View {
-        let columns = [
-            GridItem(.flexible(minimum: 0), spacing: 10),
-            GridItem(.flexible(minimum: 0), spacing: 10)
-        ]
-
-        return LazyVGrid(columns: columns, alignment: .center, spacing: 8) {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 0), spacing: 10),
+                GridItem(.flexible(minimum: 0), spacing: 10)
+            ],
+            alignment: .center,
+            spacing: 8
+        ) {
             ForEach(availableGames) { game in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        selectedGameKey = game.gameKey
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        GameIconView(
-                            gameKey: game.gameKey,
-                            remoteURL: resolvedIconURL(for: game),
-                            size: 38,
-                            cornerRadius: 11
-                        )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(game.title)
-                                .font(.system(size: 12.5, weight: .bold))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-
-                            Text(game.bundleID)
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
-                    .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 10))
-                    .overlay {
-                        AujunpeakSlantedCardShape(cut: 10)
-                            .strokeBorder(
-                                selectedGameKey == game.gameKey ? AppTheme.borderStrong : AppTheme.border,
-                                lineWidth: selectedGameKey == game.gameKey ? 1.3 : 1
-                            )
-                    }
-                }
-                .buttonStyle(.plain)
+                gameSelectorButton(for: game)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func gameSelectorButton(for game: RemoteGameSection) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                selectedGameKey = game.gameKey
+            }
+        } label: {
+            HStack(spacing: 8) {
+                GameIconView(
+                    gameKey: game.gameKey,
+                    remoteURL: resolvedIconURL(for: game),
+                    size: 38,
+                    cornerRadius: 11
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(game.title)
+                        .font(.system(size: 12.5, weight: .bold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Text(game.bundleID)
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
+            .contentShape(AujunpeakSlantedCardShape(cut: 10))
+            .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: 10))
+            .overlay {
+                AujunpeakSlantedCardShape(cut: 10)
+                    .stroke(
+                        selectedGameKey == game.gameKey ? AppTheme.borderStrong : AppTheme.border,
+                        lineWidth: selectedGameKey == game.gameKey ? 1.3 : 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var remoteFunctions: some View {

@@ -534,7 +534,7 @@ struct LicenseActivationView: View {
                 .background(AppTheme.surface, in: AujunpeakTopSheetShape(radius: 28))
                 .overlay(alignment: .top) {
                     AujunpeakTopSheetShape(radius: 28)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                        .stroke(AppTheme.border, lineWidth: 1)
                 }
                 .shadow(color: Color.black.opacity(0.35), radius: 26, y: -8)
                 .offset(x: shake ? -7 : 0)

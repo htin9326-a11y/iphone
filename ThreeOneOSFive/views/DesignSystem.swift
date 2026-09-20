@@ -100,7 +100,7 @@ struct AujunpeakPanel<Content: View>: View {
             .background(AppTheme.surface, in: AujunpeakSlantedCardShape(cut: cut))
             .overlay {
                 AujunpeakSlantedCardShape(cut: cut)
-                    .strokeBorder(AppTheme.border, lineWidth: 1)
+                    .stroke(AppTheme.border, lineWidth: 1)
             }
     }
 }
