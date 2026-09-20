@@ -15,6 +15,7 @@ struct ContentView: View {
     @AppStorage("feature.wallpapers.enabled") private var wallpapersEnabled = false
     @AppStorage("aujunpeak.selected.game") private var selectedGameKey = "freefire"
     @State private var sideMenuExpanded = false
+    @State private var showSettings = false
 
     init() {
         _tabNavigation = State(initialValue: AppTabNavigationState())
